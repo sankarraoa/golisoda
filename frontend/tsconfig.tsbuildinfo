@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/lib/adminapi.ts","./src/lib/publicfeedbackapi.ts","./src/pages/admin/loginpage.tsx","./src/pages/admin/tenantdashboardpage.tsx","./src/pages/public/publicfeedbackpage.tsx","./src/types/admin.ts","./src/types/publicfeedback.ts"],"version":"6.0.3"}

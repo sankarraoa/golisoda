@@ -1,0 +1,482 @@
+import type {
+  Channel,
+  AnalyticsSummary,
+  DashboardData,
+  FeedbackResponse,
+  Location,
+  MeResponse,
+  Permission,
+  QuestionType,
+  Role,
+  Survey,
+  SurveyDetail,
+  SurveyQuestion,
+  SurveyVersion,
+  Tenant,
+  TenantBranding,
+  TenantUser,
+  TokenResponse,
+} from "../types/admin";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const ACCESS_TOKEN_KEY = "goliSoda.accessToken";
+const REFRESH_TOKEN_KEY = "goliSoda.refreshToken";
+
+type ApiValidationError = {
+  loc?: Array<string | number>;
+  msg?: string;
+};
+
+export function getStoredAccessToken(): string | null {
+  return window.localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+export function storeTokens(tokens: TokenResponse): void {
+  window.localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+  window.localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+}
+
+export function clearStoredTokens(): void {
+  window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+  window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+export function channelQrDownloadUrl(
+  tenantId: string,
+  channelId: string,
+  format: "png" | "svg",
+): string {
+  return `${API_BASE_URL}/tenants/${tenantId}/channels/${channelId}/qr.${format}`;
+}
+
+export async function login(email: string, password: string): Promise<TokenResponse> {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Invalid email or password.");
+  }
+
+  return response.json();
+}
+
+export async function fetchMe(token: string): Promise<MeResponse> {
+  return authenticatedFetch<MeResponse>("/auth/me", token);
+}
+
+export async function fetchTenantDashboard(
+  token: string,
+  tenantId: string,
+  permissionCodes: string[] = [],
+): Promise<DashboardData> {
+  const can = (permissionCode: string) => permissionCodes.includes(permissionCode);
+  const [tenant, branding, locations, surveys, surveyVersions, channels, users, roles, permissions, responses, analytics] =
+    await Promise.all([
+    authenticatedFetch<Tenant>(`/tenants/${tenantId}`, token),
+    can("branding:read")
+      ? authenticatedFetch<TenantBranding>(`/tenants/${tenantId}/branding`, token)
+      : Promise.resolve(emptyBranding(tenantId)),
+    can("location:read") ? authenticatedFetch<Location[]>(`/tenants/${tenantId}/locations`, token) : [],
+    can("survey:read") ? authenticatedFetch<Survey[]>(`/tenants/${tenantId}/surveys`, token) : [],
+    can("survey:read")
+      ? authenticatedFetch<SurveyVersion[]>(`/tenants/${tenantId}/surveys/versions`, token)
+      : [],
+    can("channel:read") ? authenticatedFetch<Channel[]>(`/tenants/${tenantId}/channels`, token) : [],
+    can("user:read") ? authenticatedFetch<TenantUser[]>(`/tenants/${tenantId}/users`, token) : [],
+    can("role:read") ? authenticatedFetch<Role[]>(`/tenants/${tenantId}/roles`, token) : [],
+    can("role:read") ? authenticatedFetch<Permission[]>(`/tenants/${tenantId}/permissions`, token) : [],
+    can("response:read") ? authenticatedFetch<FeedbackResponse[]>(`/tenants/${tenantId}/responses`, token) : [],
+    can("analytics:read")
+      ? authenticatedFetch<AnalyticsSummary>(`/tenants/${tenantId}/analytics/summary`, token)
+      : Promise.resolve({ total_responses: 0, nps_average: null, csat_average: null, active_channels: 0 }),
+  ]);
+
+  return {
+    tenant,
+    branding,
+    locations,
+    surveys,
+    surveyVersions,
+    channels,
+    users,
+    roles,
+    permissions,
+    responses,
+    analytics,
+  };
+}
+
+function emptyBranding(tenantId: string): TenantBranding {
+  const timestamp = new Date().toISOString();
+  return {
+    id: "",
+    tenant_id: tenantId,
+    logo_url: null,
+    primary_color: null,
+    secondary_color: null,
+    thank_you_text: "Thank you for your feedback.",
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+}
+
+export async function createLocation(
+  token: string,
+  tenantId: string,
+  payload: {
+    name: string;
+    code: string;
+    city?: string;
+    region?: string;
+    address?: string;
+  },
+): Promise<Location> {
+  return authenticatedFetch<Location>(`/tenants/${tenantId}/locations`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateLocation(
+  token: string,
+  tenantId: string,
+  locationId: string,
+  payload: {
+    name?: string;
+    code?: string;
+    city?: string | null;
+    region?: string | null;
+    address?: string | null;
+    is_active?: boolean;
+  },
+): Promise<Location> {
+  return authenticatedFetch<Location>(`/tenants/${tenantId}/locations/${locationId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createSurvey(
+  token: string,
+  tenantId: string,
+  payload: {
+    title: string;
+    slug: string;
+    description?: string;
+    default_locale: string;
+  },
+): Promise<Survey> {
+  return authenticatedFetch<Survey>(`/tenants/${tenantId}/surveys`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateSurvey(
+  token: string,
+  tenantId: string,
+  surveyId: string,
+  payload: {
+    status?: "draft" | "published" | "archived";
+  },
+): Promise<Survey> {
+  return authenticatedFetch<Survey>(`/tenants/${tenantId}/surveys/${surveyId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function copySurvey(
+  token: string,
+  tenantId: string,
+  surveyId: string,
+  payload: {
+    title: string;
+    slug: string;
+  },
+): Promise<Survey> {
+  return authenticatedFetch<Survey>(`/tenants/${tenantId}/surveys/${surveyId}/copy`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createChannel(
+  token: string,
+  tenantId: string,
+  payload: {
+    name: string;
+    location_id: string;
+    survey_version_id: string;
+    channel_type: "qr" | "kiosk";
+  },
+): Promise<Channel> {
+  return authenticatedFetch<Channel>(`/tenants/${tenantId}/channels`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateChannel(
+  token: string,
+  tenantId: string,
+  channelId: string,
+  payload: {
+    name?: string;
+    location_id?: string;
+    survey_version_id?: string;
+    channel_type?: "qr" | "kiosk";
+    status?: "active" | "disabled";
+  },
+): Promise<Channel> {
+  return authenticatedFetch<Channel>(`/tenants/${tenantId}/channels/${channelId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function copyChannel(
+  token: string,
+  tenantId: string,
+  channelId: string,
+  payload: { name: string },
+): Promise<Channel> {
+  return authenticatedFetch<Channel>(`/tenants/${tenantId}/channels/${channelId}/copy`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function downloadChannelQr(
+  token: string,
+  tenantId: string,
+  channel: Channel,
+  format: "png" | "svg",
+): Promise<void> {
+  const response = await fetch(channelQrDownloadUrl(tenantId, channel.id, format), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    throw new Error(await errorMessageFromResponse(response));
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${channel.channel_code}.${format}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function createTenantUser(
+  token: string,
+  tenantId: string,
+  payload: {
+    email: string;
+    display_name: string;
+    password: string;
+  },
+): Promise<TenantUser> {
+  return authenticatedFetch<TenantUser>(`/tenants/${tenantId}/users`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTenantUser(
+  token: string,
+  tenantId: string,
+  userId: string,
+  payload: {
+    email?: string;
+    display_name?: string;
+    status?: "active" | "disabled" | "invited";
+    role_code?: string;
+    location_ids?: string[];
+  },
+): Promise<TenantUser> {
+  return authenticatedFetch<TenantUser>(`/tenants/${tenantId}/users/${userId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateRole(
+  token: string,
+  tenantId: string,
+  roleId: string,
+  payload: {
+    name?: string;
+    description?: string | null;
+    permission_codes?: string[];
+  },
+): Promise<Role> {
+  return authenticatedFetch<Role>(`/tenants/${tenantId}/roles/${roleId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createRole(
+  token: string,
+  tenantId: string,
+  payload: {
+    code: string;
+    name: string;
+    description?: string | null;
+    permission_codes: string[];
+  },
+): Promise<Role> {
+  return authenticatedFetch<Role>(`/tenants/${tenantId}/roles`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function assignTenantUserRole(
+  token: string,
+  tenantId: string,
+  userId: string,
+  payload: {
+    role_code: string;
+    scope: "tenant" | "location";
+    location_id?: string;
+  },
+): Promise<TenantUser> {
+  return authenticatedFetch<TenantUser>(`/tenants/${tenantId}/users/${userId}/roles`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTenantBranding(
+  token: string,
+  tenantId: string,
+  payload: {
+    logo_url?: string | null;
+    primary_color?: string | null;
+    secondary_color?: string | null;
+    thank_you_text?: string;
+  },
+): Promise<TenantBranding> {
+  return authenticatedFetch<TenantBranding>(`/tenants/${tenantId}/branding`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchSurveyDetail(
+  token: string,
+  tenantId: string,
+  surveyId: string,
+): Promise<SurveyDetail> {
+  return authenticatedFetch<SurveyDetail>(`/tenants/${tenantId}/surveys/${surveyId}`, token);
+}
+
+export async function addSurveyQuestion(
+  token: string,
+  tenantId: string,
+  surveyId: string,
+  payload: {
+    question_key: string;
+    question_type: QuestionType;
+    prompt: string;
+    help_text?: string;
+    is_required: boolean;
+    is_pii: boolean;
+    sort_order: number;
+    options: Array<{ value: string; label: string; sort_order: number }>;
+  },
+): Promise<SurveyQuestion> {
+  return authenticatedFetch<SurveyQuestion>(`/tenants/${tenantId}/surveys/${surveyId}/questions`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateSurveyQuestion(
+  token: string,
+  tenantId: string,
+  surveyId: string,
+  questionId: string,
+  payload: {
+    question_key: string;
+    question_type: QuestionType;
+    prompt: string;
+    help_text?: string;
+    is_required: boolean;
+    is_pii: boolean;
+    sort_order: number;
+    options: Array<{ value: string; label: string; sort_order: number }>;
+  },
+): Promise<SurveyQuestion> {
+  return authenticatedFetch<SurveyQuestion>(
+    `/tenants/${tenantId}/surveys/${surveyId}/questions/${questionId}`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function publishSurvey(
+  token: string,
+  tenantId: string,
+  surveyId: string,
+): Promise<SurveyVersion> {
+  return authenticatedFetch<SurveyVersion>(`/tenants/${tenantId}/surveys/${surveyId}/publish`, token, {
+    method: "POST",
+  });
+}
+
+async function authenticatedFetch<T>(
+  path: string,
+  token: string,
+  options: RequestInit = {},
+): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...options.headers,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (response.status === 401) {
+    clearStoredTokens();
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+
+  if (!response.ok) {
+    throw new Error(await errorMessageFromResponse(response));
+  }
+
+  return response.json();
+}
+
+async function errorMessageFromResponse(response: Response): Promise<string> {
+  try {
+    const body = await response.json();
+    if (typeof body.detail === "string") {
+      return body.detail;
+    }
+    if (Array.isArray(body.detail)) {
+      return body.detail
+        .map((item: ApiValidationError) => {
+          const path = Array.isArray(item.loc) ? item.loc.join(".") : "field";
+          return `${path}: ${item.msg ?? "Invalid value"}`;
+        })
+        .join(" ");
+    }
+  } catch {
+    return "We could not load this page.";
+  }
+  return "We could not load this page.";
+}

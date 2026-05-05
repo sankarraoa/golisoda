@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "goli-soda-backend"
+version = "0.1.0"
+description = "Backend foundation for the Goli Soda multi-tenant feedback SaaS."
+requires-python = ">=3.12"
+dependencies = [
+  "alembic",
+  "argon2-cffi",
+  "asyncpg",
+  "cryptography",
+  "email-validator",
+  "fastapi",
+  "prometheus-fastapi-instrumentator",
+  "pydantic-settings",
+  "PyJWT[crypto]",
+  "qrcode[pil]",
+  "redis",
+  "sqlalchemy[asyncio]",
+  "structlog",
+  "uvicorn[standard]",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx",
+  "locust",
+  "mypy",
+  "pytest",
+  "pytest-asyncio",
+  "ruff",
+  "testcontainers[postgres,redis]",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/*.py" = ["E501"]
