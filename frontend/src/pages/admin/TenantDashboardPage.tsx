@@ -48,6 +48,7 @@ import type {
 } from "../../types/admin";
 import { FeedbackFlow } from "../../components/feedback/FeedbackFlow";
 import { mapSurveyQuestionToPublic } from "../../components/feedback/mapSurveyQuestionToPublic";
+import { PortalOverflowMenu } from "../../components/PortalOverflowMenu";
 import {
   TEMPLATE_GALLERY_FIXTURE_QUESTIONS,
   buildPreviewContextStub,
@@ -3142,6 +3143,7 @@ function LocationTable({
   const [archivingLocation, setArchivingLocation] = useState<Location | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const canArchiveLocation = hasClientPermission(me, "location:archive");
+  const rowMenuButtonRefs = useRef(new Map<string, HTMLButtonElement | null>());
 
   if (locations.length === 0) {
     return <EmptyState title="No locations yet" body="Add your first location to start collecting feedback." />;
@@ -3188,14 +3190,7 @@ function LocationTable({
         </thead>
         <tbody>
           {locations.map((location, index) => (
-            <tr
-              key={location.id}
-              onMouseLeave={() => {
-                if (openMenuLocationId === location.id) {
-                  setOpenMenuLocationId(null);
-                }
-              }}
-            >
+            <tr key={location.id}>
               <td>
                 <div className="fw-medium">{location.name}</div>
                 <div className="text-sm text-secondary">
@@ -3216,6 +3211,10 @@ function LocationTable({
               <td>
                 <div className={`row-actions ${openMenuLocationId === location.id ? "row-actions--open" : ""}`}>
                   <button
+                    ref={(element) => {
+                      if (element) rowMenuButtonRefs.current.set(location.id, element);
+                      else rowMenuButtonRefs.current.delete(location.id);
+                    }}
                     className="btn btn--icon"
                     type="button"
                     aria-label="Location actions"
@@ -3228,7 +3227,12 @@ function LocationTable({
                     <span className="material-symbols-outlined">more_vert</span>
                   </button>
                   {openMenuLocationId === location.id ? (
-                    <div className={`row-menu ${index >= locations.length - 2 ? "row-menu--up" : ""}`}>
+                    <PortalOverflowMenu
+                      anchorEl={rowMenuButtonRefs.current.get(location.id) ?? null}
+                      open
+                      placement={index >= locations.length - 2 ? "above" : "auto"}
+                      onClose={() => setOpenMenuLocationId(null)}
+                    >
                       <button
                         className="row-menu-item"
                         disabled={!location.is_active}
@@ -3256,7 +3260,7 @@ function LocationTable({
                         <span className="material-symbols-outlined">archive</span>
                         Archive
                       </button>
-                    </div>
+                    </PortalOverflowMenu>
                   ) : null}
                 </div>
               </td>
@@ -3380,6 +3384,7 @@ function ChannelTable({
   const [actionError, setActionError] = useState<string | null>(null);
   const [copiedPublicLinkChannelId, setCopiedPublicLinkChannelId] = useState<string | null>(null);
   const canArchiveChannel = hasClientPermission(me, "channel:archive");
+  const rowMenuButtonRefs = useRef(new Map<string, HTMLButtonElement | null>());
 
   async function copyPublicFeedbackUrl(channel: Channel) {
     try {
@@ -3464,14 +3469,7 @@ function ChannelTable({
             const surveyLine = channelSurveyLine(dashboardData, channel.survey_version_id);
             const templateLine = templateLabelForChannel(dashboardData, channel.survey_template_id);
             return (
-              <tr
-                key={channel.id}
-                onMouseLeave={() => {
-                  if (openMenuChannelId === channel.id) {
-                    setOpenMenuChannelId(null);
-                  }
-                }}
-              >
+              <tr key={channel.id}>
               <td>
                 <div className="fw-medium">{channel.name}</div>
                 <div className="text-sm text-secondary">{channel.channel_code}</div>
@@ -3495,6 +3493,10 @@ function ChannelTable({
               <td>
                 <div className={`row-actions ${openMenuChannelId === channel.id ? "row-actions--open" : ""}`}>
                   <button
+                    ref={(element) => {
+                      if (element) rowMenuButtonRefs.current.set(channel.id, element);
+                      else rowMenuButtonRefs.current.delete(channel.id);
+                    }}
                     className="btn btn--icon"
                     type="button"
                     aria-label="Channel actions"
@@ -3507,7 +3509,12 @@ function ChannelTable({
                     <span className="material-symbols-outlined">more_vert</span>
                   </button>
                   {openMenuChannelId === channel.id ? (
-                    <div className={`row-menu ${index >= rows.length - 2 ? "row-menu--up" : ""}`}>
+                    <PortalOverflowMenu
+                      anchorEl={rowMenuButtonRefs.current.get(channel.id) ?? null}
+                      open
+                      placement={index >= rows.length - 2 ? "above" : "auto"}
+                      onClose={() => setOpenMenuChannelId(null)}
+                    >
                       <a
                         className="row-menu-item"
                         href={publicFeedbackAbsoluteUrl(channel.channel_code)}
@@ -3550,7 +3557,7 @@ function ChannelTable({
                         <span className="material-symbols-outlined">archive</span>
                         Archive
                       </button>
-                    </div>
+                    </PortalOverflowMenu>
                   ) : null}
                 </div>
               </td>
@@ -3756,6 +3763,7 @@ function SurveyTable({
   const canModifySurvey = (survey: Survey) =>
     hasClientPermission(me, "survey:update") &&
     (!survey.created_by_user_id || survey.created_by_user_id === me?.user_id);
+  const rowMenuButtonRefs = useRef(new Map<string, HTMLButtonElement | null>());
 
   if (surveys.length === 0) {
     return <EmptyState title="No surveys yet" body="Create a survey before creating channels." />;
@@ -3821,14 +3829,7 @@ function SurveyTable({
         </thead>
         <tbody>
           {rows.map((survey, index) => (
-            <tr
-              key={survey.id}
-              onMouseLeave={() => {
-                if (openMenuSurveyId === survey.id) {
-                  setOpenMenuSurveyId(null);
-                }
-              }}
-            >
+            <tr key={survey.id}>
               <td>
                 <div className="fw-medium">{survey.title}</div>
                 <div className="text-sm text-secondary">{survey.description || "No description"}</div>
@@ -3843,6 +3844,10 @@ function SurveyTable({
               <td>
                 <div className={`row-actions ${openMenuSurveyId === survey.id ? "row-actions--open" : ""}`}>
                   <button
+                    ref={(element) => {
+                      if (element) rowMenuButtonRefs.current.set(survey.id, element);
+                      else rowMenuButtonRefs.current.delete(survey.id);
+                    }}
                     className="btn btn--icon"
                     type="button"
                     aria-label="Survey actions"
@@ -3855,7 +3860,12 @@ function SurveyTable({
                     <span className="material-symbols-outlined">more_vert</span>
                   </button>
                   {openMenuSurveyId === survey.id ? (
-                    <div className={`row-menu ${index >= rows.length - 2 ? "row-menu--up" : ""}`}>
+                    <PortalOverflowMenu
+                      anchorEl={rowMenuButtonRefs.current.get(survey.id) ?? null}
+                      open
+                      placement={index >= rows.length - 2 ? "above" : "auto"}
+                      onClose={() => setOpenMenuSurveyId(null)}
+                    >
                       <button
                         className="row-menu-item"
                         disabled={survey.status === "archived" || !canModifySurvey(survey)}
@@ -3906,7 +3916,7 @@ function SurveyTable({
                         <span className="material-symbols-outlined">content_copy</span>
                         Copy
                       </button>
-                    </div>
+                    </PortalOverflowMenu>
                   ) : null}
                 </div>
               </td>
@@ -4105,6 +4115,7 @@ function UserTable({
   const [editingUser, setEditingUser] = useState<TenantUser | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const canArchiveUser = hasClientPermission(me, "user:archive");
+  const rowMenuButtonRefs = useRef(new Map<string, HTMLButtonElement | null>());
 
   if (users.length === 0) {
     return <EmptyState title="No users yet" body="Add tenant admins, analysts, or managers." />;
@@ -4155,14 +4166,7 @@ function UserTable({
           {users.map((user, index) => {
             const primaryRole = user.role_bindings[0];
             return (
-              <tr
-                key={user.id}
-                onMouseLeave={() => {
-                  if (openMenuUserId === user.id) {
-                    setOpenMenuUserId(null);
-                  }
-                }}
-              >
+              <tr key={user.id}>
                 <td>
                   <div className="fw-medium">{user.display_name}</div>
                   <div className="text-sm text-secondary">{user.email}</div>
@@ -4180,6 +4184,10 @@ function UserTable({
                 <td>
                   <div className={`row-actions ${openMenuUserId === user.id ? "row-actions--open" : ""}`}>
                     <button
+                      ref={(element) => {
+                        if (element) rowMenuButtonRefs.current.set(user.id, element);
+                        else rowMenuButtonRefs.current.delete(user.id);
+                      }}
                       className="btn btn--icon"
                       type="button"
                       aria-label="User actions"
@@ -4190,7 +4198,12 @@ function UserTable({
                       <span className="material-symbols-outlined">more_vert</span>
                     </button>
                     {openMenuUserId === user.id ? (
-                      <div className={`row-menu ${index >= users.length - 2 ? "row-menu--up" : ""}`}>
+                      <PortalOverflowMenu
+                        anchorEl={rowMenuButtonRefs.current.get(user.id) ?? null}
+                        open
+                        placement={index >= users.length - 2 ? "above" : "auto"}
+                        onClose={() => setOpenMenuUserId(null)}
+                      >
                         <button
                           className="row-menu-item"
                           type="button"
@@ -4211,7 +4224,7 @@ function UserTable({
                           <span className="material-symbols-outlined">archive</span>
                           Archive
                         </button>
-                      </div>
+                      </PortalOverflowMenu>
                     ) : null}
                   </div>
                 </td>
