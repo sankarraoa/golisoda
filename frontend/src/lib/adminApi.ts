@@ -1,6 +1,6 @@
 import type {
-  Channel,
   AnalyticsSummary,
+  Channel,
   DashboardData,
   FeedbackResponse,
   Location,
@@ -11,6 +11,7 @@ import type {
   Survey,
   SurveyDetail,
   SurveyQuestion,
+  SurveyTemplate,
   SurveyVersion,
   Tenant,
   TenantBranding,
@@ -67,14 +68,33 @@ export async function fetchMe(token: string): Promise<MeResponse> {
   return authenticatedFetch<MeResponse>("/auth/me", token);
 }
 
+export const ACTIVE_TENANT_STORAGE_KEY = "goliSoda.activeTenantId";
+
+export async function fetchTenantList(token: string): Promise<Tenant[]> {
+  return authenticatedFetch<Tenant[]>("/tenants", token);
+}
+
 export async function fetchTenantDashboard(
   token: string,
   tenantId: string,
   permissionCodes: string[] = [],
 ): Promise<DashboardData> {
   const can = (permissionCode: string) => permissionCodes.includes(permissionCode);
-  const [tenant, branding, locations, surveys, surveyVersions, channels, users, roles, permissions, responses, analytics] =
-    await Promise.all([
+  const canTemplates = can("survey:read") || can("channel:read");
+  const [
+    tenant,
+    branding,
+    locations,
+    surveys,
+    surveyVersions,
+    surveyTemplates,
+    channels,
+    users,
+    roles,
+    permissions,
+    responses,
+    analytics,
+  ] = await Promise.all([
     authenticatedFetch<Tenant>(`/tenants/${tenantId}`, token),
     can("branding:read")
       ? authenticatedFetch<TenantBranding>(`/tenants/${tenantId}/branding`, token)
@@ -84,6 +104,7 @@ export async function fetchTenantDashboard(
     can("survey:read")
       ? authenticatedFetch<SurveyVersion[]>(`/tenants/${tenantId}/surveys/versions`, token)
       : [],
+    canTemplates ? authenticatedFetch<SurveyTemplate[]>("/survey-templates", token) : Promise.resolve([]),
     can("channel:read") ? authenticatedFetch<Channel[]>(`/tenants/${tenantId}/channels`, token) : [],
     can("user:read") ? authenticatedFetch<TenantUser[]>(`/tenants/${tenantId}/users`, token) : [],
     can("role:read") ? authenticatedFetch<Role[]>(`/tenants/${tenantId}/roles`, token) : [],
@@ -100,6 +121,7 @@ export async function fetchTenantDashboard(
     locations,
     surveys,
     surveyVersions,
+    surveyTemplates,
     channels,
     users,
     roles,
@@ -211,6 +233,7 @@ export async function createChannel(
     name: string;
     location_id: string;
     survey_version_id: string;
+    survey_template_id: string;
     channel_type: "qr" | "kiosk";
   },
 ): Promise<Channel> {
@@ -228,6 +251,7 @@ export async function updateChannel(
     name?: string;
     location_id?: string;
     survey_version_id?: string;
+    survey_template_id?: string;
     channel_type?: "qr" | "kiosk";
     status?: "active" | "disabled";
   },
@@ -421,6 +445,33 @@ export async function updateSurveyQuestion(
     {
       method: "PATCH",
       body: JSON.stringify(payload),
+    },
+  );
+}
+
+/** Partial PATCH (e.g. sort_order-only) — omit unset fields. */
+export async function patchSurveyQuestion(
+  token: string,
+  tenantId: string,
+  surveyId: string,
+  questionId: string,
+  patch: Partial<{
+    question_key: string;
+    question_type: QuestionType;
+    prompt: string;
+    help_text: string | undefined;
+    is_required: boolean;
+    is_pii: boolean;
+    sort_order: number;
+    options: Array<{ value: string; label: string; sort_order: number }>;
+  }>,
+): Promise<SurveyQuestion> {
+  return authenticatedFetch<SurveyQuestion>(
+    `/tenants/${tenantId}/surveys/${surveyId}/questions/${questionId}`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify(patch),
     },
   );
 }

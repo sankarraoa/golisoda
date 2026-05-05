@@ -10,12 +10,15 @@ from app.api.channel_schemas import (
     PublicLocationResponse,
     PublicSubmitRequest,
     PublicSubmitResponse,
+    PublicSurveyTemplatePayload,
 )
 from app.core.database import get_session
 from app.models.channel import FeedbackChannel
 from app.models.enums import ChannelStatus, TenantStatus
 from app.models.survey import SurveyVersion
+from app.models.survey_template import SurveyTemplate
 from app.models.tenant import Location, Tenant, TenantBranding
+from app.schemas.survey_presentation import parse_presentation
 from app.services.feedback_submission import enqueue_public_submission, validate_public_answers
 
 router = APIRouter(tags=["public"])
@@ -48,6 +51,14 @@ async def get_public_feedback_context(
             detail="Channel context missing.",
         )
 
+    survey_template = await session.get(SurveyTemplate, channel.survey_template_id)
+    if survey_template is None or not survey_template.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Survey template missing.",
+        )
+    presentation = parse_presentation(survey_template.presentation)
+
     snapshot = survey_version.schema_snapshot
     return PublicFeedbackContextResponse(
         channel_code=channel.channel_code,
@@ -67,6 +78,12 @@ async def get_public_feedback_context(
         survey_version_id=survey_version.id,
         survey=snapshot["survey"],
         questions=snapshot["questions"],
+        template=PublicSurveyTemplatePayload(
+            id=survey_template.id,
+            slug=survey_template.slug,
+            name=survey_template.name,
+            presentation=presentation,
+        ),
     )
 
 @router.post("/public/{channel_code}/submit", response_model=PublicSubmitResponse, status_code=202)

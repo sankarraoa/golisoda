@@ -70,10 +70,15 @@ class SurveyVersionStatus(StrEnum):
 
 class QuestionType(StrEnum):
     NPS = "nps"
-    CSAT = "csat"
+    CSAT_5 = "csat_5"
+    CSAT_4 = "csat_4"
+    CSAT_2 = "csat_2"
     SINGLE_SELECTION = "single_selection"
     MULTI_SELECTION = "multi_selection"
     PLAIN_TEXT = "plain_text"
+    SHORT_TEXT = "short_text"
+    PHONE = "phone"
+    EMAIL = "email"
     DROPDOWN = "dropdown"
 
 

@@ -1,0 +1,65 @@
+================================================================================
+DESIGN BRIEF — Public feedback survey UI (for a design LLM or human designer)
+================================================================================
+
+ROLE
+You are designing visual/UX specs (Figma-ready: components, spacing, states,
+typography, color usage) for a **customer-facing feedback form** embedded in a
+mobile-first web shell (card on a branded background). The product already
+implements the interaction patterns below; your job is to propose a cohesive
+**design system** and **screen template** that covers every question type and
+both flow layouts.
+
+INPUT DATA
+Use the JSON file **`question-types.json`** in this folder as the single source
+of truth for:
+- All question type IDs, answer shapes, and option requirements
+- Template-level **`surveyPresentation`** switches (layouts, NPS mode, CSAT
+  renderers, progress, large touch targets)
+
+OBJECTIVES
+1. Produce **one master template** (or stepper + single-page variants) showing
+   how a question block is structured: branded header, optional logo, question
+   title (prompt), optional helper line, control area, primary CTA row
+   (Next/Submit), subtle footer.
+
+2. For **each entry in `questionTypes`**, specify:
+   - Default and selected/hover/focus/disabled states
+   - Minimum touch targets (reference `touch.large_targets` as a “kiosk” mode)
+   - How error text appears under the control when required and empty/invalid
+
+3. Respect **semantic meaning** where fixed in JSON (e.g. NPS 0–10, CSAT
+   integer ranges, binary Yes=2 / No=1 for thumb-style binary, multi-select
+   affordance).
+
+4. **Do not** invent new question types or change value ranges; if you need a
+   variant, map it to an existing `renderer` or document it as a future
+   extension.
+
+CSAT / EMOJI SCALES
+When `emoji_5` / `emoji_4` are used, each option is a **vertical stack**:
+large emoji on top, text label below, in a **horizontally centered** row (wrap
+on narrow viewports). Use the default pairings in the JSON as the baseline
+wording and glyphs unless the brand requires localization.
+
+SELECTION CONTROLS
+Single and multi selection use **horizontal, centered** button groups that wrap.
+Multi-selection must visually communicate **multiple answers allowed** (e.g.
+hint line + checklist / check on selected pills).
+
+DELIVERABLES (what to output)
+A) Cover page: breakpoints (e.g. 360 / 393 / 430 width), typography scale,
+   spacing grid, semantic colors (primary, surface, border, success, error).
+B) Component sheet: primitives used across types (buttons, inputs, emoji cell,
+   progress bar vs dots).
+C) One annotated frame per **`questionTypes[].id`** with the variant that best
+   matches default product behavior for “Stepper (default)” template.
+D) Optional: second column for **single_page** density (same components, tighter
+   vertical rhythm between sections).
+
+CONSTRAINTS
+- Mobile-first; assume thumb reach and one-hand use.
+- WCAG-minded contrast for text and selected states.
+- Prefer system or web-safe emoji rendering notes if brand fonts affect emoji.
+
+END OF PROMPT — attach **`question-types.json`** to the agent context.

@@ -37,7 +37,6 @@ from app.models.enums import (
     AuditOutcome,
     BindingScope,
     PermissionCode,
-    TenantStatus,
     UserStatus,
 )
 from app.models.tenant import Location, Tenant, TenantBranding
@@ -239,48 +238,35 @@ async def serialize_role(session: AsyncSession, role: Role) -> RoleResponse:
     )
 
 
-@router.post("", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
-async def create_tenant(
-    payload: TenantCreateRequest,
-    request: Request,
+@router.get("", response_model=list[TenantResponse])
+async def list_tenants(
     principal: Annotated[Principal, Depends(get_current_principal)],
     session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[TenantResponse]:
+    """Global users see all tenants; tenant-bound users see only their tenant."""
+    require_permission(principal, PermissionCode.TENANT_READ)
+
+    if principal.tenant_id is None:
+        tenants = await session.scalars(select(Tenant).order_by(Tenant.name, Tenant.slug))
+        return [TenantResponse.model_validate(tenant, from_attributes=True) for tenant in tenants]
+
+    tenant = await get_tenant_or_404(session, principal.tenant_id)
+    return [TenantResponse.model_validate(tenant, from_attributes=True)]
+
+
+@router.post("", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
+async def create_tenant(
+    _payload: TenantCreateRequest,
+    _request: Request,
+    _principal: Annotated[Principal, Depends(get_current_principal)],
+    _session: Annotated[AsyncSession, Depends(get_session)],
 ) -> TenantResponse:
-    require_permission(principal, PermissionCode.TENANT_CREATE)
-
-    tenant = Tenant(
-        name=payload.name,
-        slug=payload.slug,
-        default_locale=payload.default_locale,
-        status=TenantStatus.ACTIVE,
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            "Tenant creation is handled by the platform provisioning service, not this admin API."
+        ),
     )
-    session.add(tenant)
-
-    try:
-        await session.flush()
-        session.add(TenantBranding(tenant_id=tenant.id))
-        await write_audit_log(
-            session,
-            actor_type=AuditActorType.USER,
-            actor_id=str(principal.user_id),
-            tenant_id=tenant.id,
-            action=AuditAction.TENANT_ACCESS,
-            outcome=AuditOutcome.SUCCESS,
-            resource_type="tenant",
-            resource_id=str(tenant.id),
-            request_id=getattr(request.state, "request_id", None),
-            metadata={"operation": "create_tenant"},
-        )
-        await session.commit()
-    except IntegrityError as exc:
-        await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Tenant slug already exists.",
-        ) from exc
-
-    await session.refresh(tenant)
-    return TenantResponse.model_validate(tenant, from_attributes=True)
 
 
 @router.get("/{tenant_id}", response_model=TenantResponse)

@@ -109,13 +109,13 @@ async def get_analytics_summary(
     nps_average = await _average_numeric_answer(
         session,
         tenant_id=tenant_id,
-        question_type="nps",
+        question_types=("nps",),
         location_ids=principal.location_ids if is_location_scoped(principal) else None,
     )
     csat_average = await _average_numeric_answer(
         session,
         tenant_id=tenant_id,
-        question_type="csat",
+        question_types=("csat_5", "csat_4", "csat_2"),
         location_ids=principal.location_ids if is_location_scoped(principal) else None,
     )
     return AnalyticsSummaryResponse(
@@ -130,12 +130,12 @@ async def _average_numeric_answer(
     session: AsyncSession,
     *,
     tenant_id: UUID,
-    question_type: str,
+    question_types: tuple[str, ...],
     location_ids: list[UUID] | None = None,
 ) -> float | None:
     answer_query = select(ResponseAnswer.value_json).where(
         ResponseAnswer.tenant_id == tenant_id,
-        ResponseAnswer.question_type == question_type,
+        ResponseAnswer.question_type.in_(question_types),
         ResponseAnswer.is_pii.is_(False),
     )
     if location_ids:

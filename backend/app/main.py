@@ -7,6 +7,7 @@ from app.api.channels import router as channels_router
 from app.api.health import router as health_router
 from app.api.public import router as public_router
 from app.api.responses import router as responses_router
+from app.api.survey_templates import router as survey_templates_router
 from app.api.surveys import router as surveys_router
 from app.api.tenants import router as tenants_router
 from app.core.config import get_settings
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(tenants_router)
     app.include_router(surveys_router)
     app.include_router(channels_router)
+    app.include_router(survey_templates_router)
     app.include_router(responses_router)
     app.include_router(public_router)
     app.include_router(health_router)

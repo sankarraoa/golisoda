@@ -5,12 +5,14 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.models.enums import ChannelStatus, ChannelType
+from app.schemas.survey_presentation import SurveyPresentationConfig
 
 
 class ChannelCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     location_id: UUID
     survey_version_id: UUID
+    survey_template_id: UUID
     channel_type: ChannelType = ChannelType.QR
     metadata: dict = Field(default_factory=dict)
 
@@ -19,6 +21,7 @@ class ChannelUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     location_id: UUID | None = None
     survey_version_id: UUID | None = None
+    survey_template_id: UUID | None = None
     channel_type: ChannelType | None = None
     status: ChannelStatus | None = None
     metadata: dict | None = None
@@ -33,6 +36,7 @@ class ChannelResponse(BaseModel):
     tenant_id: UUID
     location_id: UUID
     survey_version_id: UUID
+    survey_template_id: UUID
     name: str
     channel_code: str
     channel_type: ChannelType
@@ -57,6 +61,13 @@ class PublicLocationResponse(BaseModel):
     region: str | None
 
 
+class PublicSurveyTemplatePayload(BaseModel):
+    id: UUID
+    slug: str
+    name: str
+    presentation: SurveyPresentationConfig
+
+
 class PublicFeedbackContextResponse(BaseModel):
     channel_code: str
     tenant_id: UUID
@@ -65,6 +76,7 @@ class PublicFeedbackContextResponse(BaseModel):
     survey_version_id: UUID
     survey: dict
     questions: list[dict]
+    template: PublicSurveyTemplatePayload
 
 
 class PublicAnswerRequest(BaseModel):

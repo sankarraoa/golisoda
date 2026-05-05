@@ -10,6 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.channel import FeedbackChannel
 from app.models.enums import QuestionType, QueueStatus
 from app.models.queue import FeedbackSubmissionQueue
+from app.utils.answer_validation import (
+    validated_email_normalized,
+    validated_phone_normalized,
+    validated_short_text,
+)
 
 
 def hash_idempotency_key(channel_code: str, idempotency_key: str) -> str:
@@ -118,7 +123,7 @@ def _validate_value(*, question: dict, question_type: QuestionType, value: Any) 
             )
         return value
 
-    if question_type == QuestionType.CSAT:
+    if question_type == QuestionType.CSAT_5:
         if not isinstance(value, int) or value < 1 or value > 5:
             raise HTTPException(
                 status_code=422,
@@ -126,10 +131,59 @@ def _validate_value(*, question: dict, question_type: QuestionType, value: Any) 
             )
         return value
 
+    if question_type == QuestionType.CSAT_4:
+        if not isinstance(value, int) or value < 1 or value > 4:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{question['question_key']} must be an integer from 1 to 4.",
+            )
+        return value
+
+    if question_type == QuestionType.CSAT_2:
+        if not isinstance(value, int) or value < 1 or value > 2:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{question['question_key']} must be an integer from 1 to 2.",
+            )
+        return value
+
     if question_type == QuestionType.PLAIN_TEXT:
         if not isinstance(value, str):
             raise HTTPException(status_code=422, detail=f"{question['question_key']} must be text.")
         return value.strip()
+
+    if question_type == QuestionType.SHORT_TEXT:
+        if not isinstance(value, str):
+            raise HTTPException(status_code=422, detail=f"{question['question_key']} must be text.")
+        out = validated_short_text(value)
+        if out is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{question['question_key']} exceeds maximum length.",
+            )
+        return out
+
+    if question_type == QuestionType.PHONE:
+        if not isinstance(value, str):
+            raise HTTPException(status_code=422, detail=f"{question['question_key']} must be text.")
+        out = validated_phone_normalized(value)
+        if out is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{question['question_key']} is not a valid phone number.",
+            )
+        return out
+
+    if question_type == QuestionType.EMAIL:
+        if not isinstance(value, str):
+            raise HTTPException(status_code=422, detail=f"{question['question_key']} must be text.")
+        out = validated_email_normalized(value)
+        if out is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{question['question_key']} is not a valid email address.",
+            )
+        return out
 
     option_values = {option["value"] for option in question.get("options", [])}
     if question_type in {QuestionType.SINGLE_SELECTION, QuestionType.DROPDOWN}:

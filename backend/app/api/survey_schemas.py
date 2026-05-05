@@ -11,6 +11,20 @@ OPTION_QUESTION_TYPES = {
     QuestionType.DROPDOWN,
 }
 
+SCALE_CAPTION_QUESTION_TYPES = frozenset(
+    {
+        QuestionType.CSAT_5,
+        QuestionType.CSAT_4,
+        QuestionType.CSAT_2,
+    }
+)
+
+SCALE_CAPTION_LABEL_COUNTS: dict[QuestionType, int] = {
+    QuestionType.CSAT_5: 5,
+    QuestionType.CSAT_4: 4,
+    QuestionType.CSAT_2: 2,
+}
+
 
 class SurveyCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
@@ -47,6 +61,41 @@ class QuestionOptionCreateRequest(BaseModel):
     sort_order: int = 0
 
 
+def _validate_question_options(
+    question_type: QuestionType,
+    options: list[QuestionOptionCreateRequest],
+) -> None:
+    if question_type in OPTION_QUESTION_TYPES:
+        if not options:
+            raise ValueError(f"{question_type.value} requires at least one option.")
+        return
+    if question_type in SCALE_CAPTION_QUESTION_TYPES:
+        if not options:
+            return
+        expected = SCALE_CAPTION_LABEL_COUNTS[question_type]
+        if len(options) != expected:
+            raise ValueError(
+                f"{question_type.value} accepts no options (default captions) or exactly "
+                f"{expected} options with values '1' through '{expected}'."
+            )
+        value_set = {opt.value for opt in options}
+        required_values = {str(index) for index in range(1, expected + 1)}
+        if value_set != required_values:
+            raise ValueError(
+                f"{question_type.value} options must use values {sorted(required_values, key=int)}."
+            )
+        return
+    if question_type in {
+        QuestionType.PLAIN_TEXT,
+        QuestionType.SHORT_TEXT,
+        QuestionType.PHONE,
+        QuestionType.EMAIL,
+    } and options:
+        raise ValueError(f"{question_type.value} does not accept options.")
+    if options:
+        raise ValueError(f"{question_type.value} does not accept options.")
+
+
 class QuestionCreateRequest(BaseModel):
     question_key: str = Field(pattern=r"^[a-zA-Z0-9_:-]{1,120}$")
     question_type: QuestionType
@@ -60,10 +109,7 @@ class QuestionCreateRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_options(self) -> "QuestionCreateRequest":
-        if self.question_type in OPTION_QUESTION_TYPES and not self.options:
-            raise ValueError(f"{self.question_type.value} requires at least one option.")
-        if self.question_type not in OPTION_QUESTION_TYPES and self.options:
-            raise ValueError(f"{self.question_type.value} does not accept options.")
+        _validate_question_options(self.question_type, self.options)
         return self
 
 
@@ -80,10 +126,11 @@ class QuestionUpdateRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_options(self) -> "QuestionUpdateRequest":
-        if self.question_type in OPTION_QUESTION_TYPES and self.options == []:
-            raise ValueError(f"{self.question_type.value} requires at least one option.")
-        if self.question_type not in OPTION_QUESTION_TYPES and self.options:
-            raise ValueError(f"{self.question_type.value} does not accept options.")
+        if self.options is None:
+            return self
+        if self.question_type is None:
+            raise ValueError("question_type is required when updating options.")
+        _validate_question_options(self.question_type, self.options)
         return self
 
 

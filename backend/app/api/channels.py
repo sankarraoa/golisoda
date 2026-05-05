@@ -30,6 +30,7 @@ from app.models.enums import (
     SurveyVersionStatus,
 )
 from app.models.survey import SurveyVersion
+from app.models.survey_template import SurveyTemplate
 from app.models.tenant import Location, Tenant
 from app.services.audit import write_audit_log
 from app.services.channels import generate_unique_channel_code
@@ -101,12 +102,26 @@ def require_channel_location_scope(principal: Principal, channel: FeedbackChanne
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found.")
 
 
+async def get_survey_template_for_channel(
+    session: AsyncSession,
+    template_id: UUID,
+) -> SurveyTemplate:
+    survey_template = await session.get(SurveyTemplate, template_id)
+    if survey_template is None or not survey_template.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Survey template not found or inactive.",
+        )
+    return survey_template
+
+
 def serialize_channel(channel: FeedbackChannel) -> ChannelResponse:
     return ChannelResponse(
         id=channel.id,
         tenant_id=channel.tenant_id,
         location_id=channel.location_id,
         survey_version_id=channel.survey_version_id,
+        survey_template_id=channel.survey_template_id,
         name=channel.name,
         channel_code=channel.channel_code,
         channel_type=channel.channel_type,
@@ -137,12 +152,14 @@ async def create_channel(
         tenant_id=tenant_id,
         survey_version_id=payload.survey_version_id,
     )
+    await get_survey_template_for_channel(session, payload.survey_template_id)
 
     channel_code = await generate_unique_channel_code(session)
     channel = FeedbackChannel(
         tenant_id=tenant_id,
         location_id=payload.location_id,
         survey_version_id=payload.survey_version_id,
+        survey_template_id=payload.survey_template_id,
         name=payload.name,
         channel_code=channel_code,
         channel_type=payload.channel_type,
@@ -166,6 +183,7 @@ async def create_channel(
             metadata={
                 "location_id": str(channel.location_id),
                 "survey_version_id": str(channel.survey_version_id),
+                "survey_template_id": str(channel.survey_template_id),
             },
         )
         await session.commit()
@@ -224,6 +242,9 @@ async def update_channel(
             survey_version_id=payload.survey_version_id,
         )
         channel.survey_version_id = payload.survey_version_id
+    if payload.survey_template_id is not None:
+        await get_survey_template_for_channel(session, payload.survey_template_id)
+        channel.survey_template_id = payload.survey_template_id
     if payload.name is not None:
         channel.name = payload.name
     if payload.channel_type is not None:
@@ -277,6 +298,7 @@ async def copy_channel(
         tenant_id=tenant_id,
         location_id=source_channel.location_id,
         survey_version_id=source_channel.survey_version_id,
+        survey_template_id=source_channel.survey_template_id,
         name=payload.name,
         channel_code=channel_code,
         channel_type=source_channel.channel_type,

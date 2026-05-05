@@ -1,11 +1,16 @@
 import argparse
 import asyncio
 import signal
+import sys
 import uuid
+from pathlib import Path
+
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent / "backend"
+if _BACKEND_ROOT.is_dir():
+    sys.path.insert(0, str(_BACKEND_ROOT))
 
 from app.core.database import get_session_factory
 from app.workers.feedback_submission import process_feedback_submission_batch
-
 
 shutdown_event = asyncio.Event()
 

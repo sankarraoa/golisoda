@@ -1,4 +1,10 @@
 import asyncio
+import sys
+from pathlib import Path
+
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent / "backend"
+if _BACKEND_ROOT.is_dir():
+    sys.path.insert(0, str(_BACKEND_ROOT))
 
 from app.core.config import get_settings
 from app.core.database import check_database

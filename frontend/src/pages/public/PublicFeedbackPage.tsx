@@ -1,13 +1,9 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { FeedbackFlow } from "../../components/feedback/FeedbackFlow";
 import { fetchPublicFeedbackContext, submitPublicFeedback } from "../../lib/publicFeedbackApi";
-import type {
-  AnswerValue,
-  PublicFeedbackContext,
-  PublicQuestion,
-  SubmitAnswer,
-} from "../../types/publicFeedback";
+import type { PublicFeedbackContext, SubmitAnswer } from "../../types/publicFeedback";
+import { resolveSurveyPresentation } from "../../types/publicFeedback";
 
 type ViewState = "loading" | "ready" | "submitted" | "error";
 
@@ -22,16 +18,16 @@ function getChannelCodeFromPath(): string {
 export function PublicFeedbackPage() {
   const [context, setContext] = useState<PublicFeedbackContext | null>(null);
   const [viewState, setViewState] = useState<ViewState>("loading");
-  const [questionIndex, setQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
-  const [fieldError, setFieldError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [thankYouText, setThankYouText] = useState<string | null>(null);
   const [resetSeconds, setResetSeconds] = useState(5);
+  const [formResetKey, setFormResetKey] = useState(0);
 
   const channelCode = useMemo(getChannelCodeFromPath, []);
-  const isKioskMode = useMemo(() => new URLSearchParams(window.location.search).get("kiosk") === "1", []);
+  const isKioskMode = useMemo(
+    () => new URLSearchParams(window.location.search).get("kiosk") === "1",
+    [],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -70,10 +66,7 @@ export function PublicFeedbackPage() {
     }
 
     if (context.branding.primary_color) {
-      document.documentElement.style.setProperty(
-        "--color-tenant-primary",
-        context.branding.primary_color,
-      );
+      document.documentElement.style.setProperty("--color-tenant-primary", context.branding.primary_color);
     } else {
       document.documentElement.style.removeProperty("--color-tenant-primary");
     }
@@ -98,9 +91,9 @@ export function PublicFeedbackPage() {
       setResetSeconds((currentSeconds) => {
         if (currentSeconds <= 1) {
           window.clearInterval(intervalId);
-          setAnswers({});
-          setQuestionIndex(0);
+          setSubmitError(null);
           setThankYouText(null);
+          setFormResetKey((current) => current + 1);
           setViewState("ready");
           return 5;
         }
@@ -142,285 +135,42 @@ export function PublicFeedbackPage() {
     );
   }
 
-  const currentQuestion = context.questions[questionIndex];
-  const isLastQuestion = questionIndex === context.questions.length - 1;
-  const progressWidth = `${((questionIndex + 1) / context.questions.length) * 100}%`;
-
-  function updateAnswer(questionKey: string, value: AnswerValue) {
-    setAnswers((currentAnswers) => ({ ...currentAnswers, [questionKey]: value }));
-    setFieldError(null);
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!currentQuestion || !context) {
-      return;
-    }
-
-    const validationError = validateQuestionAnswer(currentQuestion, answers[currentQuestion.question_key]);
-    if (validationError) {
-      setFieldError(validationError);
-      return;
-    }
-
-    if (!isLastQuestion) {
-      setQuestionIndex((currentIndex) => currentIndex + 1);
-      setFieldError(null);
-      return;
-    }
-
-    setIsSubmitting(true);
-    setSubmitError(null);
-    try {
-      const submitAnswers: SubmitAnswer[] = context.questions
-        .filter((question) => answers[question.question_key] !== undefined)
-        .map((question) => ({
-          question_key: question.question_key,
-          value: answers[question.question_key],
-        }));
-      const response = await submitPublicFeedback(channelCode, {
-        locale: context.survey.default_locale,
-        answers: submitAnswers,
-        metadata: {
-          source: "public-web",
-          location_id: context.location.id,
-        },
-      });
-      setThankYouText(response.thank_you_text);
-      setViewState("submitted");
-    } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Your response was not saved.");
-      setViewState("error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
+  const presentation = resolveSurveyPresentation(context);
+  const templateSlug = context.template?.slug ?? "default_stepper";
 
   return (
-    <PublicShell>
-      <form className="public-card" onSubmit={handleSubmit}>
-        <div className="public-progress">
-          <div
-            className="public-progress-value"
-            style={{ "--progress-width": progressWidth } as CSSProperties}
-          />
-        </div>
-        <header className="public-header">
-          <TenantLogo context={context} />
-          <h1 className="public-title">{context.survey.title}</h1>
-          <p className="public-subtitle">{context.location.name}</p>
-        </header>
-        <main className="public-body">
-          <p className="question-kicker">
-            Question {questionIndex + 1} of {context.questions.length}
-          </p>
-          <h2 className="question-title">{currentQuestion.prompt}</h2>
-          {currentQuestion.help_text ? (
-            <p className="question-help">{currentQuestion.help_text}</p>
-          ) : null}
-          <div className="answer-area">
-            <QuestionInput
-              question={currentQuestion}
-              value={answers[currentQuestion.question_key]}
-              onChange={(value) => updateAnswer(currentQuestion.question_key, value)}
-            />
-            {fieldError ? <div className="public-error">{fieldError}</div> : null}
-          </div>
-        </main>
-        <footer className="public-footer">
-          {questionIndex > 0 ? (
-            <button
-              className="btn btn--ghost"
-              type="button"
-              onClick={() => {
-                setQuestionIndex((currentIndex) => currentIndex - 1);
-                setFieldError(null);
-              }}
-            >
-              Back
-            </button>
-          ) : null}
-          <button className="btn btn--tenant" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Submitting" : isLastQuestion ? "Submit" : "Next"}
-          </button>
-        </footer>
-      </form>
-      <p className="public-powered">Powered by goliSoda</p>
-    </PublicShell>
+    <FeedbackFlow
+      branding={context.branding}
+      channelCode={channelCode}
+      key={formResetKey}
+      locationName={context.location.name}
+      onSubmitAnswers={async (submitAnswers: SubmitAnswer[]) => {
+        try {
+          const response = await submitPublicFeedback(channelCode, {
+            locale: context.survey.default_locale,
+            answers: submitAnswers,
+            metadata: {
+              source: "public-web",
+              location_id: context.location.id,
+            },
+          });
+          setThankYouText(response.thank_you_text);
+          setViewState("submitted");
+        } catch (error) {
+          setSubmitError(error instanceof Error ? error.message : "Your response was not saved.");
+          setViewState("error");
+        }
+      }}
+      presentation={presentation}
+      questions={context.questions}
+      surveyTitle={context.survey.title}
+      templateSlug={templateSlug}
+    />
   );
 }
 
 function PublicShell({ children }: { children: ReactNode }) {
   return <div className="public-shell">{children}</div>;
-}
-
-function TenantLogo({ context }: { context: PublicFeedbackContext }) {
-  if (context.branding.logo_url) {
-    return <img className="tenant-logo" src={context.branding.logo_url} alt="" />;
-  }
-
-  const initial = context.survey.title.trim().slice(0, 1).toUpperCase() || "G";
-  return <div className="tenant-logo-fallback">{initial}</div>;
-}
-
-function QuestionInput({
-  question,
-  value,
-  onChange,
-}: {
-  question: PublicQuestion;
-  value: AnswerValue | undefined;
-  onChange: (value: AnswerValue) => void;
-}) {
-  if (question.question_type === "nps") {
-    return (
-      <div className="nps-scale">
-        <div className="nps-options">
-          {Array.from({ length: 11 }, (_, score) => (
-            <button
-              className={`scale-button ${value === score ? "scale-button--selected" : ""}`}
-              key={score}
-              type="button"
-              onClick={() => onChange(score)}
-            >
-              {score}
-            </button>
-          ))}
-        </div>
-        <div className="scale-labels">
-          <span>Not at all</span>
-          <span>Extremely</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (question.question_type === "csat") {
-    return (
-      <div className="nps-scale">
-        <div className="nps-options">
-          {[1, 2, 3, 4, 5].map((score) => (
-            <button
-              className={`scale-button ${value === score ? "scale-button--selected" : ""}`}
-              key={score}
-              type="button"
-              onClick={() => onChange(score)}
-            >
-              {score}
-            </button>
-          ))}
-        </div>
-        <div className="scale-labels">
-          <span>Poor</span>
-          <span>Excellent</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (question.question_type === "dropdown") {
-    return (
-      <div className="field">
-        <label className="field-label" htmlFor={question.question_key}>
-          Select one
-        </label>
-        <select
-          className="field-input"
-          id={question.question_key}
-          onChange={(event) => onChange(event.target.value)}
-          value={typeof value === "string" ? value : ""}
-        >
-          <option value="">Choose an option</option>
-          {question.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
-    );
-  }
-
-  if (question.question_type === "single_selection") {
-    return (
-      <div className="option-list">
-        {question.options.map((option) => (
-          <button
-            className={`option-button ${
-              value === option.value ? "option-button--selected" : ""
-            }`}
-            key={option.value}
-            type="button"
-            onClick={() => onChange(option.value)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    );
-  }
-
-  if (question.question_type === "multi_selection") {
-    const selectedValues = Array.isArray(value) ? value : [];
-    return (
-      <div className="option-list">
-        {question.options.map((option) => {
-          const isSelected = selectedValues.includes(option.value);
-          return (
-            <button
-              className={`option-button ${isSelected ? "option-button--selected" : ""}`}
-              key={option.value}
-              type="button"
-              onClick={() => {
-                onChange(
-                  isSelected
-                    ? selectedValues.filter((selectedValue) => selectedValue !== option.value)
-                    : [...selectedValues, option.value],
-                );
-              }}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
-
-  return (
-    <div className="field">
-      <label className="field-label" htmlFor={question.question_key}>
-        Your answer
-      </label>
-      <textarea
-        className="field-input field-textarea"
-        id={question.question_key}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder="Type your response"
-        value={typeof value === "string" ? value : ""}
-      />
-    </div>
-  );
-}
-
-function validateQuestionAnswer(question: PublicQuestion, value: AnswerValue | undefined): string | null {
-  if (!question.is_required) {
-    return null;
-  }
-
-  if (value === undefined) {
-    return "Please answer this question.";
-  }
-
-  if (Array.isArray(value) && value.length === 0) {
-    return "Please choose at least one option.";
-  }
-
-  if (typeof value === "string" && value.trim().length === 0) {
-    return "Please enter a response.";
-  }
-
-  return null;
 }
 
 function StatePanel({

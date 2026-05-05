@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Goli Soda public feedback — question types & presentation (for design handoff)",
+  "description": "Machine-readable catalog of survey question types and template-level presentation. Pair with design-agent-prompt.txt for LLM briefing.",
+  "meta": {
+    "product": "Public feedback form (survey on customer phone / kiosk)",
+    "layout_modes": ["stepper", "single_page"],
+    "notes": [
+      "Each screen shows a question title (prompt), optional help text below the title, then the interactive control.",
+      "Branding applies: logo, tenant primary/secondary CSS variables.",
+      "Template name is presentation-only (how controls render); surveys define which question types appear."
+    ]
+  },
+  "surveyPresentation": {
+    "description": "Per-channel template JSON; selects layout and variants for scale types.",
+    "fields": {
+      "layout": {
+        "type": "string",
+        "enum": ["stepper", "single_page"],
+        "ui_meaning": {
+          "stepper": "One primary question active per step; Next/Submit; optional progress.",
+          "single_page": "All questions in one scrollable page; submit at end."
+        }
+      },
+      "nps": {
+        "presentation": {
+          "enum": ["numeric", "segmented"],
+          "ui_meaning": {
+            "numeric": "0–11 grid (0–10), heatmap-style cells; labels 'Not at all likely' … 'Extremely likely'.",
+            "segmented": "Three bands (Not likely 0–6, Neutral 7–8, Very likely 9–10) with score chips."
+          }
+        }
+      },
+      "csat_5": {
+        "renderer": {
+          "enum": ["numeric", "stars", "emoji_5", "color_scale"],
+          "ui_meaning": {
+            "numeric": "Buttons 1–5; scale labels Poor / Excellent at ends.",
+            "stars": "Five star toggles (☆/★).",
+            "emoji_5": "Five vertical stacks: large emoji on top, text caption below (see default_emoji_scale in questionTypes).",
+            "color_scale": "Five color-gradient buttons with numbers."
+          }
+        }
+      },
+      "csat_4": {
+        "renderer": {
+          "enum": ["numeric", "stars", "emoji_4", "color_scale"],
+          "ui_meaning": "Same pattern as csat_5 but four points."
+        }
+      },
+      "csat_2": {
+        "renderer": {
+          "enum": ["numeric", "thumbs", "emoji_2", "yes_no"],
+          "ui_meaning": {
+            "numeric": "Two buttons 1 and 2.",
+            "thumbs": "Yes / No: large emoji (👍🏾 / 👎🏾) with text label under; value Yes=2, No=1.",
+            "emoji_2": "In product, same visual as thumbs (Yes/No + 👍🏾/👎🏾).",
+            "yes_no": "Two text buttons 'No' and 'Yes' (no emoji row in default implementation)."
+          }
+        }
+      },
+      "progress": {
+        "style": { "enum": ["bar", "dots", "none"] }
+      },
+      "navigation": {
+        "auto_advance": { "type": "boolean", "ui_meaning": "If true, stepper may advance after answer (product default often false)." }
+      },
+      "touch": {
+        "large_targets": {
+          "type": "boolean",
+          "ui_meaning": "Increases min tap targets (kiosk / accessibility)."
+        }
+      }
+    },
+    "legacy_csat_block": {
+      "description": "Older API may send csat.presentation instead of csat_5/4/2; digits maps to emoji_5 / emoji_4 / thumbs (not numbered buttons); stars preserves stars renderer; emoji maps to emoji scales.",
+      "presentation": ["digits", "stars", "emoji"]
+    }
+  },
+  "questionTypes": [
+    {
+      "id": "nps",
+      "label": "Net Promoter Score",
+      "answer_type": "integer",
+      "value_range": { "min": 0, "max": 10 },
+      "requires_options": false,
+      "options": [],
+      "control_summary": "Likelihood 0–10; template picks numeric heatmap or segmented bands.",
+      "accessibility": "Radiogroup or button grid with clear range labels."
+    },
+    {
+      "id": "csat_5",
+      "label": "Customer satisfaction (5-point)",
+      "answer_type": "integer",
+      "value_range": { "min": 1, "max": 5 },
+      "requires_options": false,
+      "optional_options": {
+        "description": "Survey can supply exactly 5 option rows to override captions under emoji_5 renderer; values are fixed 1–5.",
+        "default_emoji_scale": {
+          "pairing": [
+            { "score": 1, "caption": "Very Poor", "emoji": "😡" },
+            { "score": 2, "caption": "Poor", "emoji": "😞" },
+            { "score": 3, "caption": "Fair", "emoji": "😐" },
+            { "score": 4, "caption": "Good", "emoji": "😊" },
+            { "score": 5, "caption": "Excellent", "emoji": "😍" }
+          ],
+          "layout": "Horizontal row or wrapped row; centered; each cell: emoji above, caption below."
+        }
+      },
+      "control_summary": "Scale control per csat_5.renderer in surveyPresentation."
+    },
+    {
+      "id": "csat_4",
+      "label": "Customer satisfaction (4-point)",
+      "answer_type": "integer",
+      "value_range": { "min": 1, "max": 4 },
+      "requires_options": false,
+      "optional_options": {
+        "description": "Exactly 4 options can override emoji captions.",
+        "default_emoji_scale": {
+          "pairing": [
+            { "score": 1, "caption": "Poor", "emoji": "😞" },
+            { "score": 2, "caption": "Fair", "emoji": "😕" },
+            { "score": 3, "caption": "Good", "emoji": "🙂" },
+            { "score": 4, "caption": "Excellent", "emoji": "😄" }
+          ]
+        }
+      },
+      "control_summary": "Same family as csat_5 with four steps."
+    },
+    {
+      "id": "csat_2",
+      "label": "Binary satisfaction / yes-no scale",
+      "answer_type": "integer",
+      "value_range": { "min": 1, "max": 2 },
+      "semantic_values": { "1": "No", "2": "Yes" },
+      "requires_options": false,
+      "default_binary_visual": {
+        "order_left_to_right": ["Yes (👍🏾)", "No (👎🏾)"],
+        "note": "Stored values: Yes=2, No=1 for thumbs/emoji_2 style."
+      },
+      "control_summary": "Two-choice control; see csat_2.renderer variants."
+    },
+    {
+      "id": "single_selection",
+      "label": "Single choice (buttons)",
+      "answer_type": "string",
+      "requires_options": true,
+      "options_shape": { "value": "string id", "label": "display text", "sort_order": "number" },
+      "control_summary": "Exclusive choice: horizontally laid out, centered, wrapped pill/button group.",
+      "accessibility": "role=group labelled by question title; one selection only."
+    },
+    {
+      "id": "multi_selection",
+      "label": "Multiple choice (buttons)",
+      "answer_type": "string[]",
+      "requires_options": true,
+      "options_shape": { "value": "string id", "label": "display text", "sort_order": "number" },
+      "control_summary": "Non-exclusive: same horizontal centered layout as single; hint 'Choose one or more' with checklist affordance; selected state shows checkmark.",
+      "accessibility": "aria-pressed per option; group describedby hint."
+    },
+    {
+      "id": "dropdown",
+      "label": "Single choice (select)",
+      "answer_type": "string",
+      "requires_options": true,
+      "options_shape": { "value": "string id", "label": "display text", "sort_order": "number" },
+      "control_summary": "Native-style dropdown: label 'Select one', empty placeholder option."
+    },
+    {
+      "id": "plain_text",
+      "label": "Long text",
+      "answer_type": "string",
+      "requires_options": false,
+      "control_summary": "Multi-line textarea; label 'Your answer'.",
+      "validation_client": "Non-empty when required.",
+      "validation_server": "Trimmed string."
+    },
+    {
+      "id": "short_text",
+      "label": "Short text (single line)",
+      "answer_type": "string",
+      "requires_options": false,
+      "control_summary": "Single-line text input.",
+      "validation": { "max_length": 2048, "normalized": "strip whitespace" }
+    },
+    {
+      "id": "phone",
+      "label": "Phone number",
+      "answer_type": "string",
+      "requires_options": false,
+      "control_summary": "type=tel; placeholder suggests international format.",
+      "validation": {
+        "digits_min": 8,
+        "digits_max": 15,
+        "allowed_characters_human": "Digits, spaces, +, parentheses, dots, dashes.",
+        "normalized": "+digits when leading +, else digits only"
+      }
+    },
+    {
+      "id": "email",
+      "label": "Email address",
+      "answer_type": "string",
+      "requires_options": false,
+      "control_summary": "type=email; autocomplete email.",
+      "validation_server": "email-validator normalized form; optional question can stay empty unless required."
+    }
+  ],
+  "example_fixtures_order": [
+    "nps",
+    "csat_5",
+    "csat_4",
+    "csat_2",
+    "single_selection",
+    "multi_selection",
+    "plain_text",
+    "short_text",
+    "phone",
+    "email",
+    "dropdown"
+  ]
+}

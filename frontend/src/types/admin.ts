@@ -1,3 +1,5 @@
+import type { SurveyPresentationInput } from "./surveyPresentation";
+
 export type TokenResponse = {
   access_token: string;
   refresh_token: string;
@@ -14,6 +16,7 @@ export type MeResponse = {
   location_ids: string[];
   token_version: number;
 };
+
 
 export type Tenant = {
   id: string;
@@ -64,10 +67,15 @@ export type Survey = {
 
 export type QuestionType =
   | "nps"
-  | "csat"
+  | "csat_5"
+  | "csat_4"
+  | "csat_2"
   | "single_selection"
   | "multi_selection"
   | "plain_text"
+  | "short_text"
+  | "phone"
+  | "email"
   | "dropdown";
 
 export type QuestionOption = {
@@ -98,6 +106,19 @@ export type SurveyDetail = Survey & {
   questions: SurveyQuestion[];
 };
 
+export type SurveyTemplate = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  deployment_notes: string | null;
+  presentation: SurveyPresentationInput;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type SurveyVersion = {
   id: string;
   tenant_id: string;
@@ -121,6 +142,7 @@ export type Channel = {
   tenant_id: string;
   location_id: string;
   survey_version_id: string;
+  survey_template_id: string;
   name: string;
   channel_code: string;
   channel_type: "qr" | "kiosk";
@@ -201,6 +223,7 @@ export type DashboardData = {
   locations: Location[];
   surveys: Survey[];
   surveyVersions: SurveyVersion[];
+  surveyTemplates: SurveyTemplate[];
   channels: Channel[];
   users: TenantUser[];
   roles: Role[];

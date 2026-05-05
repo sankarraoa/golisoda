@@ -6,6 +6,7 @@ from app.models.queue import FeedbackSubmissionDeadLetter, FeedbackSubmissionQue
 from app.models.response import Response, ResponseAnswer
 from app.models.security import PiiKeyRegistry
 from app.models.survey import Question, QuestionOption, Survey, SurveyVersion, Translation
+from app.models.survey_template import SurveyTemplate
 from app.models.tenant import Location, Tenant, TenantBranding
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "Response",
     "ResponseAnswer",
     "Survey",
+    "SurveyTemplate",
     "SurveyVersion",
     "Tenant",
     "TenantBranding",

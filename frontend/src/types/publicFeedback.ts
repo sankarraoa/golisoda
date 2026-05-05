@@ -1,9 +1,17 @@
+import type { SurveyPresentation, SurveyPresentationInput } from "./surveyPresentation";
+import { DEFAULT_SURVEY_PRESENTATION, normalizeSurveyPresentation } from "./surveyPresentation";
+
 export type QuestionType =
   | "nps"
-  | "csat"
+  | "csat_5"
+  | "csat_4"
+  | "csat_2"
   | "single_selection"
   | "multi_selection"
   | "plain_text"
+  | "short_text"
+  | "phone"
+  | "email"
   | "dropdown";
 
 export type PublicBranding = {
@@ -32,6 +40,13 @@ export type PublicQuestion = {
   options: PublicQuestionOption[];
 };
 
+export type PublicSurveyTemplate = {
+  id: string;
+  slug: string;
+  name: string;
+  presentation: SurveyPresentationInput;
+};
+
 export type PublicFeedbackContext = {
   channel_code: string;
   tenant_id: string;
@@ -51,7 +66,18 @@ export type PublicFeedbackContext = {
     default_locale: string;
   };
   questions: PublicQuestion[];
+  template?: PublicSurveyTemplate;
 };
+
+export function resolveSurveyPresentation(
+  context: Pick<PublicFeedbackContext, "template">,
+): SurveyPresentation {
+  const raw = context.template?.presentation;
+  if (!raw) {
+    return DEFAULT_SURVEY_PRESENTATION;
+  }
+  return normalizeSurveyPresentation((raw ?? {}) as SurveyPresentationInput);
+}
 
 export type AnswerValue = string | number | string[];
 

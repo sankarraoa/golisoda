@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { ReactNode } from "react";
 
 import {
@@ -14,8 +14,10 @@ import {
   fetchSurveyDetail,
   fetchMe,
   fetchTenantDashboard,
+  fetchTenantList,
   getStoredAccessToken,
   downloadChannelQr,
+  ACTIVE_TENANT_STORAGE_KEY,
   publishSurvey,
   updateTenantBranding,
   updateLocation,
@@ -24,6 +26,7 @@ import {
   updateRole,
   updateSurvey,
   updateSurveyQuestion,
+  patchSurveyQuestion,
 } from "../../lib/adminApi";
 import type {
   Channel,
@@ -37,9 +40,20 @@ import type {
   Survey,
   SurveyDetail,
   SurveyQuestion,
+  SurveyTemplate,
   SurveyVersion,
+  Tenant,
+  TenantBranding,
   TenantUser,
 } from "../../types/admin";
+import { FeedbackFlow } from "../../components/feedback/FeedbackFlow";
+import { mapSurveyQuestionToPublic } from "../../components/feedback/mapSurveyQuestionToPublic";
+import {
+  TEMPLATE_GALLERY_FIXTURE_QUESTIONS,
+  buildPreviewContextStub,
+} from "../../components/feedback/templateGalleryFixtures";
+import { DEFAULT_SURVEY_PRESENTATION, normalizeSurveyPresentation, type SurveyPresentation } from "../../types/surveyPresentation";
+import type { PublicBranding } from "../../types/publicFeedback";
 
 type PageState = "loading" | "ready" | "error";
 type ActiveAdminView =
@@ -50,6 +64,7 @@ type ActiveAdminView =
   | "responses"
   | "analytics"
   | "organization"
+  | "templates"
   | "users"
   | "roles";
 type CreateModalType = "location" | "survey" | "channel" | "user";
@@ -62,6 +77,7 @@ const VIEW_CONFIG: Record<ActiveAdminView, { title: string; action: string | nul
   responses: { title: "Responses", action: null },
   analytics: { title: "Analytics", action: "Export CSV" },
   organization: { title: "Organization", action: null },
+  templates: { title: "Templates", action: null },
   users: { title: "Users", action: "Add User" },
   roles: { title: "Roles", action: null },
 };
@@ -146,9 +162,143 @@ const INDIAN_CITIES = [
   "Visakhapatnam",
 ];
 
+const ROLE_FILTER_ALL = "__ALL__";
+
+function humanizeRoleCode(code: string): string {
+  return code
+    .replace(/_/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function formatRoleCodesForDisplay(me: MeResponse | null | undefined, roles: Role[]): string {
+  const codes = me?.role_codes ?? [];
+  if (codes.length === 0) {
+    return "Member";
+  }
+  const byCode = new Map(roles.map((r) => [r.code, r.name]));
+  return codes.map((code) => byCode.get(code) ?? humanizeRoleCode(code)).join(", ");
+}
+
+function SidebarAccountMenu({
+  activeTenantId,
+  email,
+  onSignOut,
+  onTenantChange,
+  roleLine,
+  tenantOptions,
+}: {
+  activeTenantId: string | null;
+  email: string | undefined;
+  onSignOut: () => void;
+  onTenantChange: (tenantId: string) => void;
+  roleLine: string;
+  tenantOptions: Tenant[];
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      const node = wrapRef.current;
+      if (node && !node.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+    if (menuOpen) {
+      window.addEventListener("keydown", handleEscape);
+      return () => window.removeEventListener("keydown", handleEscape);
+    }
+  }, [menuOpen]);
+
+  return (
+    <div className="sidebar-account-wrap" ref={wrapRef}>
+      <button
+        aria-expanded={menuOpen}
+        aria-haspopup="true"
+        className="user-row"
+        type="button"
+        onClick={() => setMenuOpen((open) => !open)}
+      >
+        <div className="avatar">{userInitials(email)}</div>
+        <div className="user-info">
+          <div className="user-name">{email ?? "Signed in"}</div>
+          <div className="user-role">{roleLine}</div>
+        </div>
+        <span className="material-symbols-outlined user-menu-icon" aria-hidden>
+          {menuOpen ? "expand_less" : "expand_more"}
+        </span>
+      </button>
+      {menuOpen ? (
+        <div className="account-menu" role="menu">
+          {tenantOptions.length > 0 && activeTenantId ? (
+            <div className="account-menu-section" onClick={(e) => e.stopPropagation()}>
+              <div className="account-menu-label">Organization</div>
+              <select
+                aria-label="Active organization"
+                className="account-menu-tenant-select"
+                value={activeTenantId}
+                onChange={(event) => {
+                  const nextId = event.target.value;
+                  if (nextId && nextId !== activeTenantId) {
+                    window.sessionStorage.setItem(ACTIVE_TENANT_STORAGE_KEY, nextId);
+                    onTenantChange(nextId);
+                  }
+                  setMenuOpen(false);
+                }}
+              >
+                {tenantOptions.map((tenant) => (
+                  <option key={tenant.id} value={tenant.id}>
+                    {tenant.name} ({tenant.slug})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          {tenantOptions.length > 0 && activeTenantId ? <div className="account-menu-divider" /> : null}
+          <button
+            className="account-menu-item account-menu-item--danger"
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              setMenuOpen(false);
+              onSignOut();
+            }}
+          >
+            <span className="material-symbols-outlined" aria-hidden>
+              logout
+            </span>
+            Log out
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }) {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [tenantPickerOptions, setTenantPickerOptions] = useState<Tenant[]>([]);
   const [pageState, setPageState] = useState<PageState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveAdminView>("dashboard");
@@ -156,25 +306,70 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
   const [isCreatingSurvey, setIsCreatingSurvey] = useState(false);
   const [activeSurveyBuilderId, setActiveSurveyBuilderId] = useState<string | null>(null);
 
-  async function loadDashboard() {
+  async function loadDashboard(
+    overrideTenantId?: string | null,
+    options?: { openSurveyBuilderAfter?: string | null },
+  ) {
     const token = getStoredAccessToken();
     if (!token) {
       onSignedOut();
       return;
     }
 
+    setPageState("loading");
+    setError(null);
+    setIsCreatingSurvey(false);
+    setActiveSurveyBuilderId(null);
+    setActiveCreateModal(null);
+
     const nextMe = await fetchMe(token);
-    if (!nextMe.tenant_id) {
-      throw new Error("This dashboard currently requires a tenant-scoped user.");
+    let tenantId: string;
+
+    if (nextMe.tenant_id) {
+      setTenantPickerOptions([]);
+      tenantId = nextMe.tenant_id;
+    } else {
+      const list = await fetchTenantList(token);
+      setTenantPickerOptions(list);
+
+      if (list.length === 0) {
+        throw new Error(
+          "No tenants found. Tenants are created by the platform provisioning service.",
+        );
+      }
+
+      let chosen =
+        overrideTenantId && list.some((t) => t.id === overrideTenantId)
+          ? overrideTenantId
+          : undefined;
+
+      if (!chosen) {
+        const stored = window.sessionStorage.getItem(ACTIVE_TENANT_STORAGE_KEY);
+        chosen =
+          stored && list.some((t) => t.id === stored) ? stored : (list[0]?.id ?? undefined);
+      }
+
+      if (!chosen) {
+        throw new Error("Could not choose a tenant context.");
+      }
+
+      window.sessionStorage.setItem(ACTIVE_TENANT_STORAGE_KEY, chosen);
+      tenantId = chosen;
     }
+
     const nextDashboardData = await fetchTenantDashboard(
       token,
-      nextMe.tenant_id,
+      tenantId,
       nextMe.permission_codes,
     );
     setMe(nextMe);
     setDashboardData(nextDashboardData);
     setPageState("ready");
+
+    const openBuilder = options?.openSurveyBuilderAfter;
+    if (openBuilder) {
+      setActiveSurveyBuilderId(openBuilder);
+    }
   }
 
   useEffect(() => {
@@ -209,6 +404,8 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
   const createModalType = createModalTypeForView(activeView);
   const can = (permissionCode: string) => me?.permission_codes.includes(permissionCode) ?? false;
   const canAccessSettings = can("branding:read") || can("user:read") || can("role:read");
+  const canListTemplates = can("survey:read") || can("channel:read");
+  const showSettingsNavGroup = canAccessSettings || canListTemplates;
   const canUseActiveAction =
     (activeView === "locations" && can("location:create")) ||
     (activeView === "surveys" && can("survey:create")) ||
@@ -281,7 +478,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
               />
             </>
           ) : null}
-          {canAccessSettings ? <div className="nav-section-label">Settings</div> : null}
+          {showSettingsNavGroup ? <div className="nav-section-label">Settings</div> : null}
           {can("branding:read") ? (
             <AdminNavItem
               activeView={activeView}
@@ -289,6 +486,15 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
               label="Organization"
               onSelect={setActiveView}
               view="organization"
+            />
+          ) : null}
+          {canListTemplates ? (
+            <AdminNavItem
+              activeView={activeView}
+              icon="style"
+              label="Templates"
+              onSelect={setActiveView}
+              view="templates"
             />
           ) : null}
           {can("user:read") ? (
@@ -311,14 +517,16 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
           ) : null}
         </nav>
         <div className="sidebar-footer">
-          <button className="user-row" type="button" onClick={signOut}>
-            <div className="avatar">{userInitials(me?.email)}</div>
-            <div className="user-info">
-              <div className="user-name">{me?.email ?? "Signed in"}</div>
-              <div className="user-role">{me?.role_codes[0] ?? "Tenant Admin"}</div>
-            </div>
-            <span className="material-symbols-outlined user-menu-icon">unfold_more</span>
-          </button>
+          <SidebarAccountMenu
+            activeTenantId={dashboardData?.tenant.id ?? null}
+            email={me?.email}
+            onSignOut={signOut}
+            onTenantChange={(nextId) => {
+              void loadDashboard(nextId);
+            }}
+            roleLine={formatRoleCodesForDisplay(me, dashboardData?.roles ?? [])}
+            tenantOptions={tenantPickerOptions}
+          />
         </div>
       </aside>
       <div className="main">
@@ -354,23 +562,32 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
             ) : null}
           </div>
         </header>
-        <main className="page-content">
+        <main
+          className={activeSurveyBuilderId ? "page-content page-content--survey-builder" : "page-content"}
+        >
           {pageState === "loading" ? <DashboardLoading /> : null}
           {pageState === "error" ? <DashboardError message={error} /> : null}
-          {pageState === "ready" && dashboardData && me?.tenant_id && isCreatingSurvey ? (
+          {pageState === "ready" && dashboardData && isCreatingSurvey ? (
             <CreateSurveyModal
               onClose={() => setIsCreatingSurvey(false)}
-              onCreated={loadDashboard}
-              tenantId={me.tenant_id}
+              onSaved={async () => {
+                await loadDashboard();
+              }}
+              onSavedAndContinue={async (surveyId) => {
+                await loadDashboard(undefined, { openSurveyBuilderAfter: surveyId });
+              }}
+              tenantId={dashboardData.tenant.id}
             />
           ) : null}
-          {pageState === "ready" && dashboardData && me?.tenant_id && activeSurveyBuilderId ? (
+          {pageState === "ready" && dashboardData && activeSurveyBuilderId ? (
             <SurveyBuilderModal
               onClose={() => setActiveSurveyBuilderId(null)}
               onUpdated={loadDashboard}
               surveyId={activeSurveyBuilderId}
+              surveyTemplates={dashboardData.surveyTemplates}
               surveyVersions={dashboardData.surveyVersions}
-              tenantId={me.tenant_id}
+              tenantBranding={dashboardData.branding}
+              tenantId={dashboardData.tenant.id}
             />
           ) : null}
           {pageState === "ready" && dashboardData && !isCreatingSurvey && !activeSurveyBuilderId ? (
@@ -384,7 +601,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
           ) : null}
         </main>
       </div>
-      {activeCreateModal && dashboardData && me?.tenant_id ? (
+      {activeCreateModal && dashboardData ? (
         <CreateResourceModal
           dashboardData={dashboardData}
           modalType={activeCreateModal}
@@ -395,7 +612,10 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
             }
             await loadDashboard();
           }}
-          tenantId={me.tenant_id}
+          onSurveySavedAndContinue={async (surveyId) => {
+            await loadDashboard(undefined, { openSurveyBuilderAfter: surveyId });
+          }}
+          tenantId={dashboardData.tenant.id}
         />
       ) : null}
     </div>
@@ -513,6 +733,9 @@ function AdminView({
   if (activeView === "organization") {
     return <OrganizationView dashboardData={dashboardData} onUpdated={onUpdated} />;
   }
+  if (activeView === "templates") {
+    return <TemplatesView dashboardData={dashboardData} />;
+  }
   if (activeView === "roles") {
     return (
       <RolesView
@@ -539,19 +762,28 @@ function CreateResourceModal({
   modalType,
   onClose,
   onCreated,
+  onSurveySavedAndContinue,
   tenantId,
 }: {
   dashboardData: DashboardData;
   modalType: CreateModalType;
   onClose: () => void;
   onCreated: () => Promise<void>;
+  onSurveySavedAndContinue: (surveyId: string) => Promise<void>;
   tenantId: string;
 }) {
   if (modalType === "location") {
     return <CreateLocationModal onClose={onClose} onCreated={onCreated} tenantId={tenantId} />;
   }
   if (modalType === "survey") {
-    return <CreateSurveyModal onClose={onClose} onCreated={onCreated} tenantId={tenantId} />;
+    return (
+      <CreateSurveyModal
+        onClose={onClose}
+        onSaved={onCreated}
+        onSavedAndContinue={onSurveySavedAndContinue}
+        tenantId={tenantId}
+      />
+    );
   }
   if (modalType === "user") {
     return (
@@ -735,21 +967,21 @@ function CreateLocationModal({
 
 function CreateSurveyModal({
   onClose,
-  onCreated,
+  onSaved,
+  onSavedAndContinue,
   tenantId,
 }: {
   onClose: () => void;
-  onCreated: () => Promise<void>;
+  onSaved: () => Promise<void>;
+  onSavedAndContinue: (surveyId: string) => Promise<void>;
   tenantId: string;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [defaultLocale, setDefaultLocale] = useState("en");
-  const [createdSurveyId, setCreatedSurveyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function submit() {
+  async function submit(goToQuestions: boolean) {
     const token = getStoredAccessToken();
     if (!token) {
       setError("Please sign in again.");
@@ -767,10 +999,13 @@ function CreateSurveyModal({
         title: title.trim(),
         slug: generateUniqueSurveySlug(title),
         description: description.trim() || undefined,
-        default_locale: defaultLocale,
+        default_locale: "en",
       });
-      setCreatedSurveyId(survey.id);
-      await onCreated();
+      if (goToQuestions) {
+        await onSavedAndContinue(survey.id);
+      } else {
+        await onSaved();
+      }
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not create survey.");
     } finally {
@@ -778,43 +1013,41 @@ function CreateSurveyModal({
     }
   }
 
-  if (createdSurveyId) {
-    return (
-      <SurveyBuilderModal
-        onClose={onClose}
-        onUpdated={onCreated}
-        surveyId={createdSurveyId}
-        surveyVersions={[]}
-        tenantId={tenantId}
-      />
-    );
-  }
-
   return (
-    <section className="survey-detail-page">
-      <div className="detail-page-header">
-        <div>
-          <button className="btn btn--ghost" type="button" onClick={onClose}>
-            <span className="material-symbols-outlined">arrow_back</span>
-            Surveys
+    <ModalShell
+      error={error}
+      footer={
+        <footer className="modal-footer modal-footer--spread">
+          <button className="btn btn--ghost" disabled={isSubmitting} type="button" onClick={onClose}>
+            Cancel
           </button>
-          <h2>Create Survey</h2>
-          <p>Start with the survey details, then add questions in the next step.</p>
-        </div>
-      </div>
-      <div className="wizard-steps" aria-label="Survey creation progress">
-        <div className="wizard-step wizard-step--active">
-          <span>1</span>
-          Survey details
-        </div>
-        <div className="wizard-step">
-          <span>2</span>
-          Questions
-        </div>
-      </div>
+          <div className="modal-footer-actions">
+            <button
+              className="btn btn--secondary"
+              disabled={isSubmitting}
+              type="button"
+              onClick={() => submit(false)}
+            >
+              {isSubmitting ? "Saving" : "Save"}
+            </button>
+            <button
+              className="btn btn--primary"
+              disabled={isSubmitting}
+              type="button"
+              onClick={() => submit(true)}
+            >
+              {isSubmitting ? "Saving" : "Save and Add Questions"}
+            </button>
+          </div>
+        </footer>
+      }
+      onClose={onClose}
+      title="Create Survey"
+    >
+      <p className="modal-lead">Add a name and description. You can add questions next if you choose.</p>
       <div className="field">
         <label className="field-label" htmlFor="survey-title">
-          Survey Name
+          Survey name
         </label>
         <input
           className="field-input"
@@ -825,23 +1058,6 @@ function CreateSurveyModal({
         />
       </div>
       <div className="field">
-        <label className="field-label" htmlFor="survey-locale">
-          Default Language
-        </label>
-        <select
-          className="field-input"
-          id="survey-locale"
-          onChange={(event) => setDefaultLocale(event.target.value)}
-          value={defaultLocale}
-        >
-          <option value="en">English</option>
-          <option value="hi">Hindi</option>
-          <option value="ta">Tamil</option>
-          <option value="te">Telugu</option>
-          <option value="kn">Kannada</option>
-        </select>
-      </div>
-      <div className="field">
         <label className="field-label" htmlFor="survey-description">
           Description
         </label>
@@ -849,19 +1065,11 @@ function CreateSurveyModal({
           className="field-input modal-textarea"
           id="survey-description"
           onChange={(event) => setDescription(event.target.value)}
+          placeholder="Optional context for your team"
           value={description}
         />
       </div>
-      {error ? <div className="field-error-msg">{error}</div> : null}
-      <div className="form-footer">
-        <button className="btn btn--ghost" type="button" onClick={onClose}>
-          Cancel
-        </button>
-        <button className="btn btn--primary" disabled={isSubmitting} type="button" onClick={submit}>
-          {isSubmitting ? "Saving" : "Save and Add Questions"}
-        </button>
-      </div>
-    </section>
+    </ModalShell>
   );
 }
 
@@ -878,14 +1086,33 @@ function CreateChannelModal({
   onCreated: () => Promise<void>;
   tenantId: string;
 }) {
+  const defaultSurveyTemplateId = useMemo(() => {
+    return (
+      dashboardData.surveyTemplates.find((template) => template.slug === "default_stepper")?.id ??
+      dashboardData.surveyTemplates[0]?.id ??
+      ""
+    );
+  }, [dashboardData.surveyTemplates]);
+
   const [name, setName] = useState(channel?.name ?? "");
   const [locationId, setLocationId] = useState(channel?.location_id ?? dashboardData.locations[0]?.id ?? "");
   const [surveyVersionId, setSurveyVersionId] = useState(
     channel?.survey_version_id ?? dashboardData.surveyVersions[0]?.id ?? "",
   );
+  const [surveyTemplateId, setSurveyTemplateId] = useState(
+    channel?.survey_template_id ?? defaultSurveyTemplateId,
+  );
   const [channelType, setChannelType] = useState<"qr" | "kiosk">(channel?.channel_type ?? "qr");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setName(channel?.name ?? "");
+    setLocationId(channel?.location_id ?? dashboardData.locations[0]?.id ?? "");
+    setSurveyVersionId(channel?.survey_version_id ?? dashboardData.surveyVersions[0]?.id ?? "");
+    setSurveyTemplateId(channel?.survey_template_id ?? defaultSurveyTemplateId);
+    setChannelType(channel?.channel_type ?? "qr");
+  }, [channel, dashboardData.locations, dashboardData.surveyVersions, defaultSurveyTemplateId]);
 
   async function submit() {
     const token = getStoredAccessToken();
@@ -893,8 +1120,8 @@ function CreateChannelModal({
       setError("Please sign in again.");
       return;
     }
-    if (!name.trim() || !locationId || !surveyVersionId) {
-      setError("Channel name, location, and published survey version are required.");
+    if (!name.trim() || !locationId || !surveyVersionId || !surveyTemplateId) {
+      setError("Channel name, location, published survey version, and template are required.");
       return;
     }
 
@@ -905,6 +1132,7 @@ function CreateChannelModal({
         name: name.trim(),
         location_id: locationId,
         survey_version_id: surveyVersionId,
+        survey_template_id: surveyTemplateId,
         channel_type: channelType,
       };
       if (channel) {
@@ -974,6 +1202,24 @@ function CreateChannelModal({
             </option>
           ))}
         </select>
+      </div>
+      <div className="field">
+        <label className="field-label" htmlFor="channel-survey-template">
+          Presentation template
+        </label>
+        <select
+          className="field-input"
+          id="channel-survey-template"
+          onChange={(event) => setSurveyTemplateId(event.target.value)}
+          value={surveyTemplateId}
+        >
+          {dashboardData.surveyTemplates.map((template) => (
+            <option key={template.id} value={template.id}>
+              {template.name}
+            </option>
+          ))}
+        </select>
+        <span className="field-hint">Controls layout and visuals on the public feedback page.</span>
       </div>
       <div className="field">
         <label className="field-label" htmlFor="channel-type">
@@ -1166,6 +1412,7 @@ function CreateUserModal({
 function ModalShell({
   children,
   error,
+  footer,
   isSubmitting,
   onClose,
   onSubmit,
@@ -1174,10 +1421,11 @@ function ModalShell({
 }: {
   children: ReactNode;
   error: string | null;
-  isSubmitting: boolean;
+  footer?: ReactNode;
+  isSubmitting?: boolean;
   onClose: () => void;
-  onSubmit: () => void;
-  submitLabel: string;
+  onSubmit?: () => void;
+  submitLabel?: string;
   title: string;
 }) {
   return (
@@ -1186,14 +1434,21 @@ function ModalShell({
         <h2 className="modal-title">{title}</h2>
         <div className="modal-body">{children}</div>
         {error ? <div className="field-error-msg">{error}</div> : null}
-        <footer className="modal-footer">
-          <button className="btn btn--ghost" type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn btn--primary" disabled={isSubmitting} type="button" onClick={onSubmit}>
-            {isSubmitting ? "Saving" : submitLabel}
-          </button>
-        </footer>
+        {footer ?? (
+          <footer className="modal-footer">
+            <button className="btn btn--ghost" type="button" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="btn btn--primary"
+              disabled={isSubmitting}
+              type="button"
+              onClick={onSubmit}
+            >
+              {isSubmitting ? "Saving" : (submitLabel ?? "Save")}
+            </button>
+          </footer>
+        )}
       </section>
     </div>
   );
@@ -1236,6 +1491,58 @@ function generateLocationCode(name: string): string {
   return `${nameCode}-${randomSuffix}`;
 }
 
+/** Stable ID for matching answers and analytics; must not change after responses exist. API: ^[a-zA-Z0-9_:-]{1,120}$ */
+function generateQuestionKey(): string {
+  const suffix =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID().replace(/-/g, "")
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+  return `q_${suffix}`.slice(0, 120);
+}
+
+function sortQuestionsForDisplay(questions: SurveyQuestion[]): SurveyQuestion[] {
+  return [...questions].sort((a, b) => {
+    if (a.sort_order !== b.sort_order) {
+      return a.sort_order - b.sort_order;
+    }
+    return a.created_at.localeCompare(b.created_at);
+  });
+}
+
+/** Insert gap before zero-based item index `insertBefore` in [0, items.length] (original ordering). */
+function reorderSurveyQuestionsAtInsertion<T>(
+  items: readonly T[],
+  fromIndex: number,
+  insertBefore: number,
+): T[] {
+  const n = items.length;
+  if (
+    fromIndex < 0 ||
+    fromIndex >= n ||
+    insertBefore < 0 ||
+    insertBefore > n ||
+    n === 0
+  ) {
+    return [...items];
+  }
+  const next = [...items];
+  const [removed] = next.splice(fromIndex, 1);
+  let insertAt = insertBefore;
+  if (fromIndex < insertBefore) {
+    insertAt -= 1;
+  }
+  insertAt = Math.max(0, Math.min(insertAt, next.length));
+  next.splice(insertAt, 0, removed);
+  return next;
+}
+
+function insertionIndexFromDragOver(el: HTMLElement, clientY: number, rowIndex: number): number {
+  const rect = el.getBoundingClientRect();
+  return clientY < rect.top + rect.height / 2 ? rowIndex : rowIndex + 1;
+}
+
+const DND_QUESTION_INDEX = "application/x-golisoda-question-index";
+
 function matchesSearchTerm(values: Array<string | null | undefined>, searchTerm: string): boolean {
   const normalizedSearch = searchTerm.trim().toLowerCase();
   if (!normalizedSearch) {
@@ -1244,31 +1551,105 @@ function matchesSearchTerm(values: Array<string | null | undefined>, searchTerm:
   return values.some((value) => value?.toLowerCase().includes(normalizedSearch));
 }
 
+function channelLocationCells(
+  dashboardData: DashboardData,
+  locationId: string,
+): { title: string; subtitle: string | null } {
+  const location = dashboardData.locations.find((candidate) => candidate.id === locationId);
+  if (!location) {
+    return { title: "Unknown location", subtitle: null };
+  }
+  return {
+    title: location.name,
+    subtitle: null,
+  };
+}
+
+function channelSurveyLine(dashboardData: DashboardData, surveyVersionId: string): string {
+  const version = dashboardData.surveyVersions.find((candidate) => candidate.id === surveyVersionId);
+  if (!version) {
+    return "—";
+  }
+  const survey = dashboardData.surveys.find((candidate) => candidate.id === version.survey_id);
+  const title = survey?.title ?? "Survey";
+  return `${title} · v${version.version_number}`;
+}
+
+function publicFeedbackPathForChannelCode(channelCode: string): string {
+  return `/f/${encodeURIComponent(channelCode)}`;
+}
+
+function publicFeedbackAbsoluteUrl(channelCode: string): string {
+  const path = publicFeedbackPathForChannelCode(channelCode);
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}${path}`;
+  }
+  return path;
+}
+
+function templateLabelForChannel(dashboardData: DashboardData, templateId: string): string {
+  return (
+    dashboardData.surveyTemplates.find((template) => template.id === templateId)?.name ?? "—"
+  );
+}
+
+function channelSearchValues(dashboardData: DashboardData, channel: Channel): Array<string | null | undefined> {
+  const location = dashboardData.locations.find((candidate) => candidate.id === channel.location_id);
+  const cells = channelLocationCells(dashboardData, channel.location_id);
+  return [
+    channel.name,
+    channel.channel_code,
+    channel.channel_type,
+    channel.status,
+    cells.title,
+    location?.city,
+    location?.region,
+    location?.code,
+    publicFeedbackPathForChannelCode(channel.channel_code),
+    channelSurveyLine(dashboardData, channel.survey_version_id),
+    templateLabelForChannel(dashboardData, channel.survey_template_id),
+  ];
+}
+
 function SurveyBuilderModal({
   onClose,
   onUpdated,
   surveyId,
+  surveyTemplates,
   surveyVersions,
+  tenantBranding,
   tenantId,
 }: {
   onClose: () => void;
   onUpdated: () => Promise<void>;
   surveyId: string;
+  surveyTemplates: SurveyTemplate[];
   surveyVersions: SurveyVersion[];
+  tenantBranding: TenantBranding;
   tenantId: string;
 }) {
   const [surveyDetail, setSurveyDetail] = useState<SurveyDetail | null>(null);
   const [builderMode, setBuilderMode] = useState<"editor" | "preview">("editor");
+  const [previewTemplateId, setPreviewTemplateId] = useState("");
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [questionType, setQuestionType] = useState<QuestionType>("nps");
   const [prompt, setPrompt] = useState("");
-  const [questionKey, setQuestionKey] = useState("");
   const [helpText, setHelpText] = useState("");
   const [optionsText, setOptionsText] = useState("");
   const [isPii, setIsPii] = useState(false);
   const [isRequired, setIsRequired] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [dragSourceIndex, setDragSourceIndex] = useState<number | null>(null);
+  const [dropInsertIndex, setDropInsertIndex] = useState<number | null>(null);
+  const dragQuestionIndexRef = useRef<number | null>(null);
+  const dropInsertIndexRef = useRef<number | null>(null);
+  const questionListRef = useRef<HTMLDivElement | null>(null);
+
+  function clearDropIndicator() {
+    dropInsertIndexRef.current = null;
+    setDropInsertIndex(null);
+  }
 
   async function loadSurveyDetail() {
     const token = getStoredAccessToken();
@@ -1286,7 +1667,27 @@ function SurveyBuilderModal({
     });
   }, [surveyId, tenantId]);
 
-  const editingQuestion = surveyDetail?.questions.find((question) => question.id === editingQuestionId);
+  const orderedQuestions = useMemo(
+    () => (surveyDetail ? sortQuestionsForDisplay(surveyDetail.questions) : []),
+    [surveyDetail],
+  );
+
+  useEffect(() => {
+    const nextDefault =
+      surveyTemplates.find((template) => template.slug === "default_stepper")?.id ??
+      surveyTemplates[0]?.id ??
+      "";
+    setPreviewTemplateId((previous) =>
+      previous && surveyTemplates.some((template) => template.id === previous) ? previous : nextDefault,
+    );
+  }, [surveyTemplates]);
+
+  const previewTemplate =
+    surveyTemplates.find((template) => template.id === previewTemplateId) ?? surveyTemplates[0];
+  const previewPresentation = normalizeSurveyPresentation(previewTemplate?.presentation ?? {});
+  const previewSlug = previewTemplate?.slug ?? "default_stepper";
+
+  const editingQuestion = orderedQuestions.find((question) => question.id === editingQuestionId);
   const latestPublishedVersion = surveyDetail
     ? latestSurveyVersionsBySurveyId(surveyVersions).get(surveyDetail.id)
     : undefined;
@@ -1296,7 +1697,6 @@ function SurveyBuilderModal({
     setEditingQuestionId(null);
     setQuestionType("nps");
     setPrompt("");
-    setQuestionKey("");
     setHelpText("");
     setOptionsText("");
     setIsPii(false);
@@ -1308,18 +1708,43 @@ function SurveyBuilderModal({
     setEditingQuestionId(question.id);
     setQuestionType(question.question_type);
     setPrompt(question.prompt);
-    setQuestionKey(question.question_key);
     setHelpText(question.help_text ?? "");
-    setOptionsText(question.options.map((option) => option.label).join("\n"));
+    setOptionsText(formatOptionsTextForEditor(question));
     setIsPii(question.is_pii);
     setIsRequired(question.is_required);
     setBuilderMode("editor");
   }
 
-  function updatePrompt(nextPrompt: string) {
-    setPrompt(nextPrompt);
-    if (!questionKey) {
-      setQuestionKey(slugify(nextPrompt).replaceAll("-", "_"));
+  async function persistQuestionOrderAfterDrag(fromIndex: number, insertBefore: number) {
+    if (isPublishedLocked || !surveyDetail) {
+      return;
+    }
+    const ordered = sortQuestionsForDisplay(surveyDetail.questions);
+    const reordered = reorderSurveyQuestionsAtInsertion(ordered, fromIndex, insertBefore);
+    if (ordered.every((question, ordinal) => question.id === reordered[ordinal]?.id)) {
+      clearDropIndicator();
+      return;
+    }
+    const token = getStoredAccessToken();
+    if (!token) {
+      setError("Please sign in again.");
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      for (let i = 0; i < reordered.length; i++) {
+        const q = reordered[i];
+        if (q.sort_order !== i) {
+          await patchSurveyQuestion(token, tenantId, surveyId, q.id, { sort_order: i });
+        }
+      }
+      await loadSurveyDetail();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Could not reorder questions.");
+    } finally {
+      setIsSubmitting(false);
+      clearDropIndicator();
     }
   }
 
@@ -1334,28 +1759,37 @@ function SurveyBuilderModal({
       setError("Please sign in again.");
       return;
     }
-    if (!prompt.trim() || !questionKey.trim()) {
-      setError("Question prompt and key are required.");
+    if (!prompt.trim()) {
+      setError("Question prompt is required.");
       return;
     }
 
-    const options = parseOptions(optionsText);
+    let options: Array<{ value: string; label: string; sort_order: number }>;
+    try {
+      options = buildQuestionOptions(questionType, optionsText);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Invalid options.");
+      return;
+    }
     if (requiresOptions(questionType) && options.length === 0) {
       setError("This question type requires at least one option.");
       return;
     }
 
+    const nextSortOrder =
+      orderedQuestions.length === 0 ? 0 : Math.max(...orderedQuestions.map((q) => q.sort_order)) + 1;
+
     setIsSubmitting(true);
     setError(null);
     try {
       const payload = {
-        question_key: questionKey.trim(),
+        question_key: editingQuestion?.question_key ?? generateQuestionKey(),
         question_type: questionType,
         prompt: prompt.trim(),
         help_text: helpText.trim() || undefined,
         is_required: isRequired,
         is_pii: isPii,
-        sort_order: editingQuestion?.sort_order ?? surveyDetail?.questions.length ?? 0,
+        sort_order: editingQuestion?.sort_order ?? nextSortOrder,
         options,
       };
       if (editingQuestionId) {
@@ -1378,7 +1812,7 @@ function SurveyBuilderModal({
       setError("Please sign in again.");
       return;
     }
-    if (!surveyDetail?.questions.length) {
+    if (!orderedQuestions.length) {
       setError("Add at least one question before publishing.");
       return;
     }
@@ -1482,26 +1916,154 @@ function SurveyBuilderModal({
                 Add
               </button>
             </div>
-            {surveyDetail?.questions.length ? (
-              <div className="question-list">
-                {surveyDetail.questions.map((question, index) => (
-                  <button
-                    className={`question-row ${editingQuestionId === question.id ? "question-row--active" : ""}`}
-                    key={question.id}
-                    disabled={isPublishedLocked}
-                    type="button"
-                    onClick={() => editQuestion(question)}
-                  >
-                    <div className="question-index">{index + 1}</div>
-                    <div>
-                      <div className="fw-medium">{question.prompt}</div>
-                      <div className="text-sm text-secondary">
-                        {question.question_type} · {question.question_key}
+            {orderedQuestions.length ? (
+              <div
+                ref={questionListRef}
+                className={`question-list ${dragSourceIndex !== null ? "question-list--dragging" : ""}`}
+                onDragLeave={(event) => {
+                  const nextTarget = event.relatedTarget;
+                  if (!(nextTarget instanceof Node) || !questionListRef.current?.contains(nextTarget)) {
+                    clearDropIndicator();
+                  }
+                }}
+              >
+                {orderedQuestions.map((question, index) => (
+                  <Fragment key={question.id}>
+                    <div
+                      aria-hidden="true"
+                      className={`question-drop-marker ${dragSourceIndex !== null && dropInsertIndex === index ? "question-drop-marker--active" : ""}`}
+                    />
+                    <div
+                      className={`question-card-wrap question-list-item ${
+                        dragSourceIndex === index ? "question-list-item--dragging" : ""
+                      }`}
+                      onDragOver={(event) => {
+                        const fromIdx = dragQuestionIndexRef.current;
+                        if (fromIdx === null || isPublishedLocked || isSubmitting) {
+                          return;
+                        }
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                        const nextInsert = insertionIndexFromDragOver(
+                          event.currentTarget as HTMLElement,
+                          event.clientY,
+                          index,
+                        );
+                        dropInsertIndexRef.current = nextInsert;
+                        setDropInsertIndex(nextInsert);
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        let fromIndex = dragQuestionIndexRef.current;
+                        if (fromIndex === null) {
+                          try {
+                            const raw = event.dataTransfer.getData(DND_QUESTION_INDEX);
+                            fromIndex = parseInt(raw, 10);
+                            if (Number.isNaN(fromIndex)) {
+                              fromIndex = parseInt(event.dataTransfer.getData("text/plain"), 10);
+                            }
+                          } catch {
+                            /* empty */
+                          }
+                        }
+                        const insertBefore = insertionIndexFromDragOver(
+                          event.currentTarget as HTMLElement,
+                          event.clientY,
+                          index,
+                        );
+                        dragQuestionIndexRef.current = null;
+                        setDragSourceIndex(null);
+                        clearDropIndicator();
+                        if (fromIndex == null || Number.isNaN(fromIndex) || isPublishedLocked) {
+                          return;
+                        }
+                        persistQuestionOrderAfterDrag(fromIndex, insertBefore).catch(() => {});
+                      }}
+                    >
+                      <div
+                        aria-hidden={isPublishedLocked}
+                        aria-label={isPublishedLocked ? undefined : `Drag to reorder: ${question.prompt}`}
+                        className="question-drag-handle"
+                        draggable={!(isPublishedLocked || isSubmitting)}
+                        title="Drag to reorder"
+                        onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}
+                        onDragStart={(dragEvent) => {
+                          if (isPublishedLocked || isSubmitting) {
+                            dragEvent.preventDefault();
+                            return;
+                          }
+                          dragEvent.stopPropagation();
+                          dragEvent.dataTransfer.effectAllowed = "move";
+                          dragEvent.dataTransfer.setData(DND_QUESTION_INDEX, String(index));
+                          dragEvent.dataTransfer.setData("text/plain", String(index));
+                          dragQuestionIndexRef.current = index;
+                          setDragSourceIndex(index);
+                          clearDropIndicator();
+                        }}
+                        onDragEnd={() => {
+                          dragQuestionIndexRef.current = null;
+                          setDragSourceIndex(null);
+                          clearDropIndicator();
+                        }}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden>
+                          drag_indicator
+                        </span>
                       </div>
+                      <button
+                        className={`question-row ${editingQuestionId === question.id ? "question-row--active" : ""}`}
+                        disabled={isPublishedLocked}
+                        type="button"
+                        onClick={() => editQuestion(question)}
+                      >
+                        <div className="question-index">{index + 1}</div>
+                        <div>
+                          <div className="fw-medium">{question.prompt}</div>
+                          <div className="text-sm text-secondary">{question.question_type}</div>
+                        </div>
+                        <span className="material-symbols-outlined question-row-edit">edit</span>
+                      </button>
                     </div>
-                    <span className="material-symbols-outlined question-row-edit">edit</span>
-                  </button>
+                  </Fragment>
                 ))}
+                <div
+                  aria-hidden="true"
+                  className={`question-drop-marker question-drop-marker--after-list ${dragSourceIndex !== null && dropInsertIndex === orderedQuestions.length ? "question-drop-marker--active" : ""}`}
+                  onDragOver={(event) => {
+                    const fromIdx = dragQuestionIndexRef.current;
+                    if (fromIdx === null || isPublishedLocked || isSubmitting) {
+                      return;
+                    }
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    const n = orderedQuestions.length;
+                    dropInsertIndexRef.current = n;
+                    setDropInsertIndex(n);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    let fromIndex = dragQuestionIndexRef.current;
+                    if (fromIndex === null) {
+                      try {
+                        const raw = event.dataTransfer.getData(DND_QUESTION_INDEX);
+                        fromIndex = parseInt(raw, 10);
+                        if (Number.isNaN(fromIndex)) {
+                          fromIndex = parseInt(event.dataTransfer.getData("text/plain"), 10);
+                        }
+                      } catch {
+                        /* empty */
+                      }
+                    }
+                    const tailInsert = orderedQuestions.length;
+                    dragQuestionIndexRef.current = null;
+                    setDragSourceIndex(null);
+                    clearDropIndicator();
+                    if (fromIndex == null || Number.isNaN(fromIndex) || isPublishedLocked) {
+                      return;
+                    }
+                    persistQuestionOrderAfterDrag(fromIndex, tailInsert).catch(() => {});
+                  }}
+                />
               </div>
             ) : (
               <EmptyState
@@ -1513,7 +2075,33 @@ function SurveyBuilderModal({
 
           <section className="builder-panel">
             {builderMode === "preview" ? (
-              <SurveyPreview questions={surveyDetail?.questions ?? []} title={surveyDetail?.title ?? "Survey"} />
+              <>
+                <div className="field">
+                  <label className="field-label" htmlFor="builder-preview-template">
+                    Preview template
+                  </label>
+                  <select
+                    className="field-input"
+                    id="builder-preview-template"
+                    onChange={(event) => setPreviewTemplateId(event.target.value)}
+                    value={previewTemplateId}
+                  >
+                    {surveyTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="field-hint">Layouts and control styles mirror the customer form.</span>
+                </div>
+                <SurveyPreview
+                  branding={tenantBranding}
+                  presentation={previewPresentation}
+                  questions={orderedQuestions}
+                  templateSlug={previewSlug}
+                  title={surveyDetail?.title ?? "Survey"}
+                />
+              </>
             ) : (
               <>
                 <h3 className="builder-section-title">
@@ -1535,11 +2123,16 @@ function SurveyBuilderModal({
                       onChange={(event) => setQuestionType(event.target.value as QuestionType)}
                       value={questionType}
                     >
-                      <option value="nps">NPS</option>
-                      <option value="csat">CSAT</option>
+                      <option value="nps">NPS (0–10)</option>
+                      <option value="csat_5">CSAT · 5-point scale</option>
+                      <option value="csat_4">CSAT · 4-point scale</option>
+                      <option value="csat_2">CSAT · binary (1–2)</option>
                       <option value="single_selection">Single Selection</option>
                       <option value="multi_selection">Multi Selection</option>
-                      <option value="plain_text">Plain Text</option>
+                      <option value="plain_text">Plain Text (multi-line)</option>
+                      <option value="short_text">Short Text (single line)</option>
+                      <option value="phone">Phone</option>
+                      <option value="email">Email</option>
                       <option value="dropdown">Dropdown</option>
                     </select>
                   </div>
@@ -1550,7 +2143,7 @@ function SurveyBuilderModal({
                     <input
                       className="field-input"
                       id="builder-prompt"
-                      onChange={(event) => updatePrompt(event.target.value)}
+                      onChange={(event) => setPrompt(event.target.value)}
                       placeholder="e.g. How was your visit?"
                       value={prompt}
                     />
@@ -1567,30 +2160,28 @@ function SurveyBuilderModal({
                       value={helpText}
                     />
                   </div>
-                  <div className="field">
-                    <label className="field-label" htmlFor="builder-key">
-                      Question Key
-                    </label>
-                    <input
-                      className="field-input"
-                      id="builder-key"
-                      onChange={(event) => setQuestionKey(event.target.value)}
-                      value={questionKey}
-                    />
-                    <span className="field-hint">Internal analytics key. Auto-generated from the prompt.</span>
-                  </div>
-                  {requiresOptions(questionType) ? (
+                  {requiresOptions(questionType) || allowsOptionalEmojiLabels(questionType) ? (
                     <div className="field">
                       <label className="field-label" htmlFor="builder-options">
-                        Options
+                        {allowsOptionalEmojiLabels(questionType) ? "Optional captions" : "Options"}
                       </label>
                       <textarea
                         className="field-input modal-textarea"
                         id="builder-options"
                         onChange={(event) => setOptionsText(event.target.value)}
-                        placeholder="One option per line, e.g.&#10;Food quality&#10;Service&#10;Ambience"
+                        placeholder={
+                          allowsOptionalEmojiLabels(questionType)
+                            ? optionalEmojiCaptionsPlaceholder(questionType)
+                            : "One option per line, e.g.&#10;Food quality&#10;Service&#10;Ambience"
+                        }
                         value={optionsText}
                       />
+                      {allowsOptionalEmojiLabels(questionType) ? (
+                        <span className="field-hint">
+                          Leave empty for default labels, or enter exactly {emojiLabelCount(questionType)}{" "}
+                          lines to customize the text under each emoji.
+                        </span>
+                      ) : null}
                     </div>
                   ) : null}
                   <label className="checkbox-row">
@@ -1637,8 +2228,8 @@ function SurveyBuilderModal({
             className="btn btn--primary"
             disabled={
               isSubmitting ||
-              !surveyDetail?.questions.length ||
-              surveyDetail.status === "published"
+              !orderedQuestions.length ||
+              surveyDetail?.status === "published"
             }
             type="button"
             onClick={publishCurrentSurvey}
@@ -1650,64 +2241,67 @@ function SurveyBuilderModal({
   );
 }
 
-function SurveyPreview({ questions, title }: { questions: SurveyQuestion[]; title: string }) {
-  return (
-    <div className="survey-preview">
-      <div className="public-progress preview-progress">
-        <div className="public-progress-value" />
-      </div>
-      <div className="preview-card-header">
-        <div className="tenant-logo-fallback">{title.slice(0, 1).toUpperCase() || "G"}</div>
-        <h3>{title}</h3>
-        <p>Preview of the full feedback form</p>
-      </div>
-      <div className="preview-question-stack">
-        {questions.length === 0 ? (
-          <EmptyState title="No preview yet" body="Add questions to preview the customer form." />
-        ) : (
-          questions.map((question, index) => (
-            <div className="preview-question" key={question.id}>
-              <div className="question-kicker">
-                Question {index + 1} of {questions.length}
-              </div>
-              <h4>{question.prompt}</h4>
-              {question.help_text ? <p>{question.help_text}</p> : null}
-              <PreviewAnswer question={question} />
-            </div>
-          ))
-        )}
-      </div>
-    </div>
+function SurveyPreview({
+  branding,
+  presentation,
+  questions,
+  templateSlug,
+  title,
+}: {
+  branding: TenantBranding;
+  presentation: SurveyPresentation;
+  questions: SurveyQuestion[];
+  templateSlug: string;
+  title: string;
+}) {
+  const stub = buildPreviewContextStub(
+    {
+      logo_url: branding.logo_url,
+      primary_color: branding.primary_color,
+      secondary_color: branding.secondary_color,
+      thank_you_text: branding.thank_you_text,
+    },
+    {
+      survey: {
+        id: "preview-survey",
+        title,
+        slug: "preview",
+        description: null,
+        default_locale: "en",
+      },
+    },
   );
-}
+  const publicQuestions =
+    questions.length > 0
+      ? [...questions].sort((a, b) => a.sort_order - b.sort_order).map(mapSurveyQuestionToPublic)
+      : TEMPLATE_GALLERY_FIXTURE_QUESTIONS;
 
-function PreviewAnswer({ question }: { question: SurveyQuestion }) {
-  if (question.question_type === "nps") {
+  const hostStyle = {
+    ...(branding.primary_color ? { "--color-tenant-primary": branding.primary_color } : {}),
+    ...(branding.secondary_color ? { "--color-tenant-secondary": branding.secondary_color } : {}),
+  } as CSSProperties;
+
+  if (questions.length === 0) {
     return (
-      <div className="preview-scale">
-        {Array.from({ length: 11 }, (_, score) => (
-          <span key={score}>{score}</span>
-        ))}
+      <div className="admin-feedback-preview-host" style={hostStyle}>
+        <EmptyState title="No preview yet" body="Add questions to preview the customer form." />
       </div>
     );
   }
-  if (question.question_type === "csat") {
-    return (
-      <div className="preview-scale preview-scale--csat">
-        {[1, 2, 3, 4, 5].map((score) => (
-          <span key={score}>{score}</span>
-        ))}
-      </div>
-    );
-  }
-  if (question.question_type === "plain_text") {
-    return <div className="preview-textarea">Text response</div>;
-  }
+
   return (
-    <div className="preview-options">
-      {question.options.map((option) => (
-        <span key={option.id}>{option.label}</span>
-      ))}
+    <div className="admin-feedback-preview-host" style={hostStyle}>
+      <FeedbackFlow
+        branding={stub.branding}
+        channelCode={null}
+        locationName={stub.location.name}
+        onSubmitAnswers={null}
+        presentation={presentation}
+        previewBadge="Preview only"
+        questions={publicQuestions}
+        surveyTitle={stub.survey.title}
+        templateSlug={templateSlug}
+      />
     </div>
   );
 }
@@ -1726,6 +2320,65 @@ function parseOptions(optionsText: string): Array<{ value: string; label: string
       label,
       sort_order: index,
     }));
+}
+
+function allowsOptionalEmojiLabels(questionType: QuestionType): boolean {
+  return ["csat_5", "csat_4", "csat_2"].includes(questionType);
+}
+
+function emojiLabelCount(questionType: QuestionType): number {
+  switch (questionType) {
+    case "csat_5":
+      return 5;
+    case "csat_4":
+      return 4;
+    case "csat_2":
+      return 2;
+    default:
+      return 0;
+  }
+}
+
+function optionalEmojiCaptionsPlaceholder(questionType: QuestionType): string {
+  const n = emojiLabelCount(questionType);
+  return Array.from({ length: n }, (_, index) => `Caption ${index + 1}`).join("\n");
+}
+
+function formatOptionsTextForEditor(question: SurveyQuestion): string {
+  if (allowsOptionalEmojiLabels(question.question_type)) {
+    return [...question.options]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((option) => option.label)
+      .join("\n");
+  }
+  return question.options.map((option) => option.label).join("\n");
+}
+
+function buildQuestionOptions(
+  questionType: QuestionType,
+  optionsText: string,
+): Array<{ value: string; label: string; sort_order: number }> {
+  if (allowsOptionalEmojiLabels(questionType)) {
+    const n = emojiLabelCount(questionType);
+    const lines = optionsText.split("\n").map((line) => line.trim()).filter(Boolean);
+    if (lines.length === 0) {
+      return [];
+    }
+    if (lines.length !== n) {
+      throw new Error(
+        `Enter exactly ${n} caption lines (one per line), or leave the field empty for default labels.`,
+      );
+    }
+    return lines.map((label, index) => ({
+      value: String(index + 1),
+      label,
+      sort_order: index,
+    }));
+  }
+  if (requiresOptions(questionType)) {
+    return parseOptions(optionsText);
+  }
+  return [];
 }
 
 function DashboardContent({
@@ -1906,10 +2559,7 @@ function ChannelsView({
     ).sort(),
   ];
   const filteredChannels = dashboardData.channels.filter((channel) => {
-    const matchesSearch = matchesSearchTerm(
-      [channel.name, channel.channel_code, channel.channel_type, channel.status],
-      searchTerm,
-    );
+    const matchesSearch = matchesSearchTerm(channelSearchValues(dashboardData, channel), searchTerm);
     const matchesStatus =
       activeStatus === "All" ||
       channel.status === (activeStatus === "Inactive" ? "disabled" : activeStatus.toLowerCase());
@@ -1980,12 +2630,16 @@ function UsersView({
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeStatus, setActiveStatus] = useState("All");
-  const [activeRole, setActiveRole] = useState("All");
-  const roleByChip: Record<string, string> = {
-    "Tenant admins": "tenant_admin",
-    Managers: "location_manager",
-    Analysts: "analyst",
-  };
+  const [activeRoleFilter, setActiveRoleFilter] = useState(ROLE_FILTER_ALL);
+
+  const roleChipItems = useMemo(() => {
+    const sorted = [...roles].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+    return [
+      { value: ROLE_FILTER_ALL, label: "All" },
+      ...sorted.map((role) => ({ value: role.code, label: role.name })),
+    ];
+  }, [roles]);
+
   const filteredUsers = users.filter((user) => {
     const roleCodes = user.role_bindings.map((binding) => binding.role_code);
     const matchesSearch = matchesSearchTerm(
@@ -1995,7 +2649,8 @@ function UsersView({
     const matchesStatus =
       activeStatus === "All" ||
       user.status === (activeStatus === "Inactive" ? "disabled" : activeStatus.toLowerCase());
-    const matchesRole = activeRole === "All" || roleCodes.includes(roleByChip[activeRole]);
+    const matchesRole =
+      activeRoleFilter === ROLE_FILTER_ALL || roleCodes.includes(activeRoleFilter);
     return matchesSearch && matchesStatus && matchesRole;
   });
 
@@ -2014,9 +2669,9 @@ function UsersView({
         ))}
       </div>
       <FilterBar
-        activeChip={activeRole}
-        chips={["All", "Tenant admins", "Managers", "Analysts"]}
-        onChipChange={setActiveRole}
+        activeChip={activeRoleFilter}
+        chipItems={roleChipItems}
+        onChipChange={setActiveRoleFilter}
         onSearchChange={setSearchTerm}
         placeholder="Search users..."
         searchValue={searchTerm}
@@ -2339,7 +2994,13 @@ function ResponsesView({ responses }: { responses: FeedbackResponse[] }) {
     const matchesFilter =
       activeFilter === "Recent" ||
       (activeFilter === "With PII" && response.answers.some((answer) => answer.is_pii)) ||
-      response.answers.some((answer) => answer.question_type.toLowerCase() === activeFilter.toLowerCase());
+      response.answers.some((answer) =>
+        answer.question_type.toLowerCase() === activeFilter.toLowerCase(),
+      ) ||
+      (activeFilter === "CSAT" &&
+        response.answers.some((answer) =>
+          ["csat_5", "csat_4", "csat_2"].includes(answer.question_type.toLowerCase()),
+        ));
     return matchesSearch && matchesFilter;
   });
 
@@ -2396,6 +3057,7 @@ function ResponsesView({ responses }: { responses: FeedbackResponse[] }) {
 
 function FilterBar({
   activeChip,
+  chipItems,
   chips,
   onChipChange,
   onSearchChange,
@@ -2403,12 +3065,16 @@ function FilterBar({
   searchValue,
 }: {
   activeChip: string;
-  chips: string[];
-  onChipChange: (chip: string) => void;
+  chipItems?: { value: string; label: string }[];
+  chips?: string[];
+  onChipChange: (value: string) => void;
   onSearchChange: (value: string) => void;
   placeholder: string;
   searchValue: string;
 }) {
+  const resolvedItems =
+    chipItems ?? (chips ?? []).map((chip) => ({ value: chip, label: chip }));
+
   return (
     <div className="filter-bar">
       <div className="search-wrap">
@@ -2421,14 +3087,14 @@ function FilterBar({
           value={searchValue}
         />
       </div>
-      {chips.map((chip) => (
+      {resolvedItems.map((item) => (
         <button
-          className={`filter-chip ${activeChip === chip ? "active" : ""}`}
-          key={chip}
-          onClick={() => onChipChange(chip)}
+          className={`filter-chip ${activeChip === item.value ? "active" : ""}`}
+          key={item.value}
+          onClick={() => onChipChange(item.value)}
           type="button"
         >
-          {chip}
+          {item.label}
         </button>
       ))}
     </div>
@@ -2507,7 +3173,7 @@ function LocationTable({
           <col className="location-col-city" />
           <col className="location-col-status" />
           <col className="location-col-code" />
-          <col className="location-col-created" />
+          <col className="location-col-updated" />
           <col className="location-col-actions" />
         </colgroup>
         <thead>
@@ -2516,7 +3182,7 @@ function LocationTable({
             <th>City</th>
             <th>Status</th>
             <th>Code</th>
-            <th>Created</th>
+            <th>Last updated</th>
             <th></th>
           </tr>
         </thead>
@@ -2546,7 +3212,7 @@ function LocationTable({
               <td>
                 <code className="code-chip">{location.code}</code>
               </td>
-              <td>{formatDate(location.created_at)}</td>
+              <td>{formatLastUpdated(location.created_at, location.updated_at)}</td>
               <td>
                 <div className={`row-actions ${openMenuLocationId === location.id ? "row-actions--open" : ""}`}>
                   <button
@@ -2712,7 +3378,21 @@ function ChannelTable({
   const [copyingChannel, setCopyingChannel] = useState<Channel | null>(null);
   const [archivingChannel, setArchivingChannel] = useState<Channel | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [copiedPublicLinkChannelId, setCopiedPublicLinkChannelId] = useState<string | null>(null);
   const canArchiveChannel = hasClientPermission(me, "channel:archive");
+
+  async function copyPublicFeedbackUrl(channel: Channel) {
+    try {
+      await navigator.clipboard.writeText(publicFeedbackAbsoluteUrl(channel.channel_code));
+      setCopiedPublicLinkChannelId(channel.id);
+      setActionError(null);
+      window.setTimeout(() => {
+        setCopiedPublicLinkChannelId((current) => (current === channel.id ? null : current));
+      }, 2000);
+    } catch {
+      setActionError("Could not copy link. Allow clipboard access or copy the path manually.");
+    }
+  }
 
   if (channels.length === 0) {
     return <EmptyState title="No channels yet" body="Create a channel to start collecting feedback." />;
@@ -2753,49 +3433,65 @@ function ChannelTable({
   }
 
   return (
-    <div className="table-wrap">
+    <div className="table-wrap channel-table-wrap">
       {actionError ? <div className="field-error-msg table-action-error">{actionError}</div> : null}
       <table className="channel-table">
         <colgroup>
           <col className="channel-col-name" />
+          <col className="channel-col-location" />
+          <col className="channel-col-survey" />
+          <col className="channel-col-template" />
           <col className="channel-col-status" />
           <col className="channel-col-type" />
-          <col className="channel-col-link" />
-          <col className="channel-col-created" />
+          <col className="channel-col-updated" />
           <col className="channel-col-actions" />
         </colgroup>
         <thead>
           <tr>
             <th>Channel Name</th>
+            <th>Location</th>
+            <th>Survey</th>
+            <th>Template</th>
             <th>Status</th>
             <th>Type</th>
-            <th>Public Link</th>
-            <th>Created</th>
+            <th>Last updated</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((channel, index) => (
-            <tr
-              key={channel.id}
-              onMouseLeave={() => {
-                if (openMenuChannelId === channel.id) {
-                  setOpenMenuChannelId(null);
-                }
-              }}
-            >
+          {rows.map((channel, index) => {
+            const locationCells = channelLocationCells(dashboardData, channel.location_id);
+            const surveyLine = channelSurveyLine(dashboardData, channel.survey_version_id);
+            const templateLine = templateLabelForChannel(dashboardData, channel.survey_template_id);
+            return (
+              <tr
+                key={channel.id}
+                onMouseLeave={() => {
+                  if (openMenuChannelId === channel.id) {
+                    setOpenMenuChannelId(null);
+                  }
+                }}
+              >
               <td>
                 <div className="fw-medium">{channel.name}</div>
                 <div className="text-sm text-secondary">{channel.channel_code}</div>
               </td>
               <td>
+                <div className="fw-medium">{locationCells.title}</div>
+              </td>
+              <td>
+                <div className="text-sm">{surveyLine}</div>
+              </td>
+              <td>
+                <div className="text-sm">{templateLine}</div>
+              </td>
+              <td className="channel-cell-status">
                 <StatusBadge className={channelStatusClass(channel.status)} label={channel.status} />
               </td>
-              <td>{channel.channel_type}</td>
-              <td>
-                <code className="code-chip">/f/{channel.channel_code}</code>
+              <td className="channel-cell-type">{channel.channel_type}</td>
+              <td className="channel-cell-date">
+                {formatLastUpdated(channel.created_at, channel.updated_at)}
               </td>
-              <td>{formatDate(channel.created_at)}</td>
               <td>
                 <div className={`row-actions ${openMenuChannelId === channel.id ? "row-actions--open" : ""}`}>
                   <button
@@ -2812,17 +3508,30 @@ function ChannelTable({
                   </button>
                   {openMenuChannelId === channel.id ? (
                     <div className={`row-menu ${index >= rows.length - 2 ? "row-menu--up" : ""}`}>
-                      <a className="row-menu-item" href={`/f/${channel.channel_code}`}>
+                      <a
+                        className="row-menu-item"
+                        href={publicFeedbackAbsoluteUrl(channel.channel_code)}
+                        rel="noopener noreferrer"
+                        target="_blank"
+                      >
                         <span className="material-symbols-outlined">open_in_new</span>
-                        Open
+                        Open public link
                       </a>
+                      <button
+                        className="row-menu-item"
+                        type="button"
+                        onClick={() => copyPublicFeedbackUrl(channel)}
+                      >
+                        <span className="material-symbols-outlined">content_copy</span>
+                        Copy public link
+                      </button>
                       <button className="row-menu-item" type="button" onClick={() => setEditingChannel(channel)}>
                         <span className="material-symbols-outlined">edit</span>
                         Edit
                       </button>
                       <button className="row-menu-item" type="button" onClick={() => setCopyingChannel(channel)}>
-                        <span className="material-symbols-outlined">content_copy</span>
-                        Copy
+                        <span className="material-symbols-outlined">copy_all</span>
+                        Duplicate channel
                       </button>
                       <button className="row-menu-item" type="button" onClick={() => downloadQr(channel, "png")}>
                         <span className="material-symbols-outlined">qr_code</span>
@@ -2845,8 +3554,9 @@ function ChannelTable({
                   ) : null}
                 </div>
               </td>
-            </tr>
-          ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {limit ? null : <Pagination count={channels.length} label="channels" />}
@@ -3090,7 +3800,7 @@ function SurveyTable({
   }
 
   return (
-    <div className="table-wrap">
+    <div className="table-wrap survey-table-wrap">
       {actionError ? <div className="field-error-msg table-action-error">{actionError}</div> : null}
       <table className="survey-table">
         <colgroup>
@@ -3105,7 +3815,7 @@ function SurveyTable({
             <th>Name</th>
             <th>Status</th>
             <th>Version</th>
-            <th>Last Updated</th>
+            <th>Last updated</th>
             <th></th>
           </tr>
         </thead>
@@ -3123,11 +3833,13 @@ function SurveyTable({
                 <div className="fw-medium">{survey.title}</div>
                 <div className="text-sm text-secondary">{survey.description || "No description"}</div>
               </td>
-              <td>
+              <td className="survey-cell-status">
                 <StatusBadge className={surveyStatusClass(survey.status)} label={survey.status} />
               </td>
               <td>{formatSurveyVersionNumber(latestVersions.get(survey.id))}</td>
-              <td>{formatDate(survey.updated_at)}</td>
+              <td className="survey-cell-date">
+                {formatLastUpdated(survey.created_at, survey.updated_at)}
+              </td>
               <td>
                 <div className={`row-actions ${openMenuSurveyId === survey.id ? "row-actions--open" : ""}`}>
                   <button
@@ -3426,7 +4138,7 @@ function UserTable({
           <col className="user-col-role" />
           <col className="user-col-locations" />
           <col className="user-col-status" />
-          <col className="user-col-created" />
+          <col className="user-col-updated" />
           <col className="user-col-actions" />
         </colgroup>
         <thead>
@@ -3435,7 +4147,7 @@ function UserTable({
             <th>Role</th>
             <th>Locations</th>
             <th>Status</th>
-            <th>Created</th>
+            <th>Last updated</th>
             <th></th>
           </tr>
         </thead>
@@ -3464,7 +4176,7 @@ function UserTable({
                 <td>
                   <StatusBadge className={userStatusClass(user.status)} label={user.status} />
                 </td>
-                <td>{formatDate(user.created_at)}</td>
+                <td>{formatLastUpdated(user.created_at, user.updated_at)}</td>
                 <td>
                   <div className={`row-actions ${openMenuUserId === user.id ? "row-actions--open" : ""}`}>
                     <button
@@ -3557,6 +4269,109 @@ function AnalyticsView({ dashboardData }: { dashboardData: DashboardData }) {
         <span className="material-symbols-outlined chart-placeholder-icon">insights</span>
         <div className="text-secondary">Trend charts and outlet comparison come next.</div>
         <div className="text-sm text-secondary">Summary cards are powered by live response data.</div>
+      </div>
+    </div>
+  );
+}
+
+function TemplatesView({ dashboardData }: { dashboardData: DashboardData }) {
+  const brandingPreview: PublicBranding = {
+    logo_url: dashboardData.branding.logo_url,
+    primary_color: dashboardData.branding.primary_color,
+    secondary_color: dashboardData.branding.secondary_color,
+    thank_you_text: dashboardData.branding.thank_you_text,
+  };
+
+  if (dashboardData.surveyTemplates.length === 0) {
+    return (
+      <div className="section-stack templates-view">
+        <EmptyState
+          title="No templates available"
+          body="Survey templates appear here when your account has channel or survey read access and the catalog has been synced."
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="section-stack templates-view">
+      <TemplateLibrarySection brandingPreview={brandingPreview} templates={dashboardData.surveyTemplates} />
+    </div>
+  );
+}
+
+function TemplateLibrarySection({
+  brandingPreview,
+  templates,
+}: {
+  brandingPreview: PublicBranding;
+  templates: SurveyTemplate[];
+}) {
+  const [selectedId, setSelectedId] = useState(templates[0]?.id ?? "");
+
+  useEffect(() => {
+    setSelectedId((prev) =>
+      prev && templates.some((template) => template.id === prev) ? prev : templates[0]?.id ?? "",
+    );
+  }, [templates]);
+
+  const selected = templates.find((template) => template.id === selectedId) ?? templates[0];
+
+  if (!selected) {
+    return null;
+  }
+
+  const stub = buildPreviewContextStub(brandingPreview);
+  const templatePresentation = normalizeSurveyPresentation(selected.presentation ?? {});
+  const hostStyle = {
+    ...(brandingPreview.primary_color ? { "--color-tenant-primary": brandingPreview.primary_color } : {}),
+    ...(brandingPreview.secondary_color ? { "--color-tenant-secondary": brandingPreview.secondary_color } : {}),
+  } as CSSProperties;
+
+  return (
+    <div className="templates-library">
+      <div className="templates-library-body">
+        <div className="templates-library-catalog">
+          <div className="template-gallery" role="list">
+            {templates.map((template) => (
+              <button
+                key={template.id}
+                type="button"
+                role="listitem"
+                className={`template-gallery-card ${
+                  template.id === selected.id ? "template-gallery-card--selected" : ""
+                }`}
+                onClick={() => setSelectedId(template.id)}
+              >
+                <div className="template-gallery-card-title">{template.name}</div>
+                {template.description ? <p className="template-gallery-card-desc">{template.description}</p> : null}
+                {template.deployment_notes ? (
+                  <p className="template-gallery-card-tip">{template.deployment_notes}</p>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="templates-library-preview">
+          <header className="template-preview-panel-header">
+            <span className="template-preview-badge">Preview</span>
+            <h3 className="template-preview-panel-title">{selected.name}</h3>
+            {selected.description ? <p className="template-preview-panel-desc">{selected.description}</p> : null}
+          </header>
+          <div className="template-gallery-preview-wrap template-gallery-preview-host" style={hostStyle}>
+            <FeedbackFlow
+              key={selected.id}
+              branding={stub.branding}
+              channelCode={null}
+              locationName={stub.location.name}
+              onSubmitAnswers={null}
+              presentation={templatePresentation}
+              questions={TEMPLATE_GALLERY_FIXTURE_QUESTIONS}
+              surveyTitle={stub.survey.title}
+              templateSlug={selected.slug}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -3891,4 +4706,11 @@ function formatDate(value: string): string {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
+}
+
+/** Show updated_at when present; otherwise created_at (never-updated rows). */
+function formatLastUpdated(createdAt: string, updatedAt?: string | null): string {
+  const trimmed = typeof updatedAt === "string" ? updatedAt.trim() : "";
+  const effective = trimmed !== "" ? trimmed : createdAt;
+  return formatDate(effective);
 }

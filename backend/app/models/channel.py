@@ -36,6 +36,12 @@ class FeedbackChannel(UuidPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
+    survey_template_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("survey_templates.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     channel_code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
     channel_type: Mapped[ChannelType] = mapped_column(
