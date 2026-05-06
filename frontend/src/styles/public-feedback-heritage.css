@@ -1,0 +1,198 @@
+/**
+ * Heritage immersive template — slug `heritage_immersive`.
+ * Luxury kiosk aesthetic for jewellery, saree salons, hospitality-style CX screens.
+ * Background tile from `/feedback-theme/heritage-ambient.png` (replace per brand if needed).
+ */
+
+.public-shell[data-template="heritage_immersive"] {
+  --heritage-glass: rgba(28, 26, 24, 0.58);
+  --heritage-glass-border: rgba(255, 255, 255, 0.12);
+  padding: 0;
+  justify-content: flex-start;
+  padding-bottom: 48px;
+}
+
+.public-shell[data-template="heritage_immersive"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-color: #1a1512;
+  background-image: linear-gradient(190deg, rgba(12, 10, 8, 0.65) 0%, rgba(26, 21, 18, 0.45) 42%, rgba(40, 30, 22, 0.35) 100%),
+    url("/feedback-theme/heritage-ambient.png");
+  background-size: cover;
+  background-position: center top;
+}
+
+.public-shell[data-template="heritage_immersive"] > form.public-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: min(520px, 92vw);
+  margin: clamp(48px, 10vh, 96px) auto 0;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.public-shell[data-template="heritage_immersive"] .public-progress {
+  display: none;
+}
+
+.public-shell[data-template="heritage_immersive"] .public-header {
+  padding: clamp(28px, 5vw, 40px) clamp(22px, 4vw, 36px);
+  border: none;
+  background: transparent;
+}
+
+.public-shell[data-template="heritage_immersive"] .tenant-logo,
+.public-shell[data-template="heritage_immersive"] .tenant-logo-fallback {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 20px;
+  filter: drop-shadow(0 2px 18px rgba(0, 0, 0, 0.45));
+}
+
+.public-shell[data-template="heritage_immersive"] .public-title {
+  color: #faf8f5;
+  font-family: Georgia, "Times New Roman", Times, serif;
+  font-size: clamp(1.5rem, 4.5vw, 2rem);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.5);
+}
+
+.public-shell[data-template="heritage_immersive"] .public-subtitle {
+  margin-top: 10px;
+  color: rgba(250, 248, 245, 0.72);
+  font-size: var(--text-sm);
+  letter-spacing: 0.02em;
+}
+
+.public-shell[data-template="heritage_immersive"] .public-body,
+.public-shell[data-template="heritage_immersive"] .public-body--single-page {
+  padding: 0 clamp(16px, 4vw, 28px) 28px;
+}
+
+.public-shell[data-template="heritage_immersive"] .feedback-section {
+  padding: clamp(22px, 4vw, 32px) clamp(20px, 4vw, 28px) clamp(28px, 5vw, 36px);
+  border-radius: 14px;
+  background: var(--heritage-glass);
+  border: 1px solid var(--heritage-glass-border);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.public-shell[data-template="heritage_immersive"] .question-kicker {
+  display: none;
+}
+
+.public-shell[data-template="heritage_immersive"] .question-title {
+  color: #faf8f5;
+  font-size: clamp(1.125rem, 3vw, 1.35rem);
+  font-weight: var(--font-medium);
+  font-family: var(--font-sans);
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.4);
+}
+
+.public-shell[data-template="heritage_immersive"] .question-help {
+  color: rgba(250, 248, 245, 0.78);
+}
+
+.public-shell[data-template="heritage_immersive"] .answer-area {
+  margin-top: 28px;
+}
+
+.public-shell[data-template="heritage_immersive"] .csat-stars {
+  gap: 12px;
+  justify-content: center;
+}
+
+.public-shell[data-template="heritage_immersive"] .csat-star-btn {
+  min-width: 52px;
+  min-height: 52px;
+  font-size: 2.25rem;
+  color: rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: var(--radius-md);
+}
+
+.public-shell[data-template="heritage_immersive"] .csat-star-btn:hover {
+  color: rgba(255, 255, 255, 0.75);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.public-shell[data-template="heritage_immersive"] .csat-star-btn--selected {
+  color: #f5e6c8;
+  border-color: rgba(212, 175, 106, 0.85);
+  background: rgba(212, 175, 106, 0.12);
+  text-shadow: 0 0 20px rgba(212, 175, 106, 0.45);
+}
+
+.public-shell[data-template="heritage_immersive"] .public-footer {
+  position: relative;
+  z-index: 1;
+  padding: 20px clamp(20px, 5vw, 32px) 32px;
+  border: none;
+  background: transparent;
+  max-width: min(520px, 92vw);
+  margin: 0 auto;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.public-shell[data-template="heritage_immersive"] .public-footer .btn--ghost {
+  color: rgba(250, 248, 245, 0.55);
+  border-color: transparent;
+}
+
+.public-shell[data-template="heritage_immersive"] .public-footer .btn--tenant {
+  background: rgba(250, 248, 245, 0.96);
+  color: #1a1512;
+  border: none;
+  font-weight: var(--font-medium);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+.public-shell[data-template="heritage_immersive"] .public-footer .btn--tenant:hover:not(:disabled) {
+  background: #fff;
+}
+
+.public-shell[data-template="heritage_immersive"] .public-error {
+  color: #ffb4a8;
+  background: rgba(80, 20, 20, 0.45);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+
+.public-shell[data-template="heritage_immersive"] .public-powered {
+  position: relative;
+  z-index: 1;
+  margin-top: 12px;
+  color: rgba(250, 248, 245, 0.38);
+  font-size: var(--text-xs);
+}
+
+/* Non-star controls: keep legible on glass */
+.public-shell[data-template="heritage_immersive"] .field-input,
+.public-shell[data-template="heritage_immersive"] textarea.field-input {
+  background: rgba(12, 10, 8, 0.35);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #faf8f5;
+}
+
+.public-shell[data-template="heritage_immersive"] .option-button,
+.public-shell[data-template="heritage_immersive"] .scale-button {
+  background: rgba(12, 10, 8, 0.25);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #faf8f5;
+}

@@ -49,6 +49,7 @@ export type PublicSurveyTemplate = {
 
 export type PublicFeedbackContext = {
   channel_code: string;
+  channel_type: "qr" | "kiosk";
   tenant_id: string;
   location: {
     id: string;

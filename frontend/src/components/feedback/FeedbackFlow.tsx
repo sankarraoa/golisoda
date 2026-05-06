@@ -30,6 +30,7 @@ export function FeedbackFlow({
   channelCode,
   onSubmitAnswers,
   previewBadge,
+  disableStepBack = false,
 }: {
   templateSlug: string;
   presentation: SurveyPresentation;
@@ -41,6 +42,8 @@ export function FeedbackFlow({
   defaultLocale?: string;
   onSubmitAnswers: ((answers: SubmitAnswer[]) => Promise<void>) | null;
   previewBadge?: ReactNode;
+  /** When true, stepper layouts hide the footer Back control (e.g. one-way QR flows). */
+  disableStepBack?: boolean;
 }) {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
@@ -170,7 +173,7 @@ export function FeedbackFlow({
 
   const footer = (
     <footer className="public-footer">
-      {layout === "stepper" && questionIndex > 0 ? (
+      {layout === "stepper" && questionIndex > 0 && !disableStepBack ? (
         <button
           className="btn btn--ghost"
           type="button"

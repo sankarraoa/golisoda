@@ -24,10 +24,13 @@ export function PublicFeedbackPage() {
   const [formResetKey, setFormResetKey] = useState(0);
 
   const channelCode = useMemo(getChannelCodeFromPath, []);
-  const isKioskMode = useMemo(
+  const kioskUrlOverride = useMemo(
     () => new URLSearchParams(window.location.search).get("kiosk") === "1",
     [],
   );
+
+  const isKioskLoop =
+    context !== null && (context.channel_type === "kiosk" || kioskUrlOverride);
 
   useEffect(() => {
     let isMounted = true;
@@ -82,7 +85,7 @@ export function PublicFeedbackPage() {
   }, [context]);
 
   useEffect(() => {
-    if (viewState !== "submitted" || !isKioskMode) {
+    if (viewState !== "submitted" || !isKioskLoop) {
       return;
     }
 
@@ -102,7 +105,19 @@ export function PublicFeedbackPage() {
     }, 1000);
 
     return () => window.clearInterval(intervalId);
-  }, [isKioskMode, viewState]);
+  }, [isKioskLoop, viewState]);
+
+  useEffect(() => {
+    if (viewState !== "submitted" || isKioskLoop || !context) {
+      return;
+    }
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("complete") === "1") {
+      return;
+    }
+    url.searchParams.set("complete", "1");
+    window.history.replaceState(window.history.state, "", url.toString());
+  }, [viewState, isKioskLoop, context]);
 
   if (viewState === "loading") {
     return <LoadingState />;
@@ -129,7 +144,7 @@ export function PublicFeedbackPage() {
           tone="success"
           title="Thank you"
           body={thankYouText || context.branding.thank_you_text}
-          helperText={isKioskMode ? `This screen resets in ${resetSeconds}s.` : undefined}
+          helperText={isKioskLoop ? `Next person in ${resetSeconds}s.` : undefined}
         />
       </PublicShell>
     );
@@ -165,6 +180,7 @@ export function PublicFeedbackPage() {
       questions={context.questions}
       surveyTitle={context.survey.title}
       templateSlug={templateSlug}
+      disableStepBack={!isKioskLoop}
     />
   );
 }

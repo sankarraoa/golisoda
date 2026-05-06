@@ -3,10 +3,12 @@ import type {
   Channel,
   DashboardData,
   FeedbackResponse,
+  FeedbackResponseListPage,
   Location,
   MeResponse,
   Permission,
   QuestionType,
+  ResponseAggregateReport,
   Role,
   Survey,
   SurveyDetail,
@@ -109,7 +111,7 @@ export async function fetchTenantDashboard(
     can("user:read") ? authenticatedFetch<TenantUser[]>(`/tenants/${tenantId}/users`, token) : [],
     can("role:read") ? authenticatedFetch<Role[]>(`/tenants/${tenantId}/roles`, token) : [],
     can("role:read") ? authenticatedFetch<Permission[]>(`/tenants/${tenantId}/permissions`, token) : [],
-    can("response:read") ? authenticatedFetch<FeedbackResponse[]>(`/tenants/${tenantId}/responses`, token) : [],
+    Promise.resolve([] as FeedbackResponse[]),
     can("analytics:read")
       ? authenticatedFetch<AnalyticsSummary>(`/tenants/${tenantId}/analytics/summary`, token)
       : Promise.resolve({ total_responses: 0, nps_average: null, csat_average: null, active_channels: 0 }),
@@ -129,6 +131,49 @@ export async function fetchTenantDashboard(
     responses,
     analytics,
   };
+}
+
+export async function fetchFeedbackResponsesPage(
+  token: string,
+  tenantId: string,
+  params: {
+    channel_id?: string;
+    survey_version_id?: string;
+    submitted_after?: string;
+    submitted_before?: string;
+    limit?: number;
+    offset?: number;
+  } = {},
+): Promise<FeedbackResponseListPage> {
+  const search = new URLSearchParams();
+  if (params.channel_id) search.set("channel_id", params.channel_id);
+  if (params.survey_version_id) search.set("survey_version_id", params.survey_version_id);
+  if (params.submitted_after) search.set("submitted_after", params.submitted_after);
+  if (params.submitted_before) search.set("submitted_before", params.submitted_before);
+  if (typeof params.limit === "number") search.set("limit", String(params.limit));
+  if (typeof params.offset === "number") search.set("offset", String(params.offset));
+  const query = search.toString();
+  const path = `/tenants/${tenantId}/responses${query ? `?${query}` : ""}`;
+  return authenticatedFetch<FeedbackResponseListPage>(path, token);
+}
+
+export async function fetchResponseAggregateReport(
+  token: string,
+  tenantId: string,
+  params: {
+    channel_id: string;
+    submitted_after?: string;
+    submitted_before?: string;
+  },
+): Promise<ResponseAggregateReport> {
+  const search = new URLSearchParams();
+  search.set("channel_id", params.channel_id);
+  if (params.submitted_after) search.set("submitted_after", params.submitted_after);
+  if (params.submitted_before) search.set("submitted_before", params.submitted_before);
+  return authenticatedFetch<ResponseAggregateReport>(
+    `/tenants/${tenantId}/responses/aggregate?${search.toString()}`,
+    token,
+  );
 }
 
 function emptyBranding(tenantId: string): TenantBranding {

@@ -70,6 +70,7 @@ class PublicSurveyTemplatePayload(BaseModel):
 
 class PublicFeedbackContextResponse(BaseModel):
     channel_code: str
+    channel_type: ChannelType
     tenant_id: UUID
     location: PublicLocationResponse
     branding: PublicBrandingResponse

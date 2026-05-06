@@ -197,6 +197,14 @@ export type FeedbackAnswer = {
   is_pii: boolean;
 };
 
+export type ResponseQuestionDefinition = {
+  question_key: string;
+  question_type: string;
+  prompt: string;
+  sort_order: number;
+  options: Array<{ value: string; label: string; sort_order?: number; id?: string }>;
+};
+
 export type FeedbackResponse = {
   id: string;
   tenant_id: string;
@@ -204,10 +212,65 @@ export type FeedbackResponse = {
   channel_name: string;
   location_id: string;
   location_name: string;
+  survey_id: string;
+  survey_title: string;
   survey_version_id: string;
+  survey_version_number: number;
   locale: string;
   submitted_at: string;
   answers: FeedbackAnswer[];
+  question_definitions: ResponseQuestionDefinition[];
+};
+
+export type FeedbackResponseListPage = {
+  total: number;
+  limit: number;
+  offset: number;
+  items: FeedbackResponse[];
+};
+
+export type DistributionBucket = {
+  value: number;
+  count: number;
+};
+
+export type AggregateChoiceRow = {
+  value: string;
+  label: string | null;
+  count: number;
+};
+
+export type QuestionAggregate = {
+  question_key: string;
+  question_type: string;
+  prompt: string;
+  sort_order: number;
+  answered_count: number;
+  cohort_response_count: number;
+  average: number | null;
+  min_value: number | null;
+  max_value: number | null;
+  distribution: DistributionBucket[];
+  choice_counts: AggregateChoiceRow[];
+  text_sample_count: number;
+  text_samples: string[];
+};
+
+export type VersionCohortAggregate = {
+  survey_version_id: string;
+  survey_id: string;
+  survey_title: string;
+  version_number: number;
+  response_count: number;
+  questions: QuestionAggregate[];
+};
+
+export type ResponseAggregateReport = {
+  channel_id: string;
+  channel_name: string;
+  submitted_after: string | null;
+  submitted_before: string | null;
+  cohorts: VersionCohortAggregate[];
 };
 
 export type AnalyticsSummary = {

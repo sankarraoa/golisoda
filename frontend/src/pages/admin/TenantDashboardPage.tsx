@@ -31,7 +31,6 @@ import {
 import type {
   Channel,
   DashboardData,
-  FeedbackResponse,
   Location,
   MeResponse,
   Permission,
@@ -55,6 +54,7 @@ import {
 } from "../../components/feedback/templateGalleryFixtures";
 import { DEFAULT_SURVEY_PRESENTATION, normalizeSurveyPresentation, type SurveyPresentation } from "../../types/surveyPresentation";
 import type { PublicBranding } from "../../types/publicFeedback";
+import { ResponsesExplorer } from "./ResponsesExplorer";
 
 type PageState = "loading" | "ready" | "error";
 type ActiveAdminView =
@@ -726,7 +726,7 @@ function AdminView({
     );
   }
   if (activeView === "responses") {
-    return <ResponsesView responses={dashboardData.responses} />;
+    return <ResponsesExplorer channels={dashboardData.channels} tenantId={dashboardData.tenant.id} />;
   }
   if (activeView === "analytics") {
     return <AnalyticsView dashboardData={dashboardData} />;
@@ -2462,6 +2462,7 @@ function LocationsView({
   tenantId: string;
 }) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusTab, setStatusTab] = useState("All");
   const [activeCity, setActiveCity] = useState("All cities");
   const cityChips = [
     "All cities",
@@ -2473,11 +2474,16 @@ function LocationsView({
       searchTerm,
     );
     const matchesCity = activeCity === "All cities" || location.city === activeCity;
-    return matchesSearch && matchesCity;
+    const matchesStatus =
+      statusTab === "All" ||
+      (statusTab === "Active" && location.is_active) ||
+      (statusTab === "Inactive" && !location.is_active);
+    return matchesSearch && matchesCity && matchesStatus;
   });
 
   return (
     <div>
+      <ChipFilterBar activeChip={statusTab} chips={["All", "Active", "Inactive"]} onChipChange={setStatusTab} />
       <FilterBar
         activeChip={activeCity}
         chips={cityChips}
@@ -2975,83 +2981,6 @@ function PermissionChecklist({
           <span>{formatPermissionCode(permission.code)}</span>
         </label>
       ))}
-    </div>
-  );
-}
-
-function ResponsesView({ responses }: { responses: FeedbackResponse[] }) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [activeFilter, setActiveFilter] = useState("Recent");
-  const filteredResponses = responses.filter((response) => {
-    const answerText = response.answers.flatMap((answer) => [
-      answer.question_key,
-      answer.question_type,
-      answer.is_pii ? "PII hidden" : String(answer.value ?? ""),
-    ]);
-    const matchesSearch = matchesSearchTerm(
-      [response.location_name, response.channel_name, response.locale, ...answerText],
-      searchTerm,
-    );
-    const matchesFilter =
-      activeFilter === "Recent" ||
-      (activeFilter === "With PII" && response.answers.some((answer) => answer.is_pii)) ||
-      response.answers.some((answer) =>
-        answer.question_type.toLowerCase() === activeFilter.toLowerCase(),
-      ) ||
-      (activeFilter === "CSAT" &&
-        response.answers.some((answer) =>
-          ["csat_5", "csat_4", "csat_2"].includes(answer.question_type.toLowerCase()),
-        ));
-    return matchesSearch && matchesFilter;
-  });
-
-  return (
-    <div>
-      <FilterBar
-        activeChip={activeFilter}
-        chips={["Recent", "With PII", "NPS", "CSAT"]}
-        onChipChange={setActiveFilter}
-        onSearchChange={setSearchTerm}
-        placeholder="Search responses..."
-        searchValue={searchTerm}
-      />
-      {filteredResponses.length === 0 ? (
-        <EmptyState title="No responses yet" body="Submit public feedback to see responses here." />
-      ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Submitted</th>
-                <th>Location</th>
-                <th>Channel</th>
-                <th>Answers</th>
-                <th>Locale</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredResponses.map((response) => (
-                <tr key={response.id}>
-                  <td>{formatDate(response.submitted_at)}</td>
-                  <td>{response.location_name}</td>
-                  <td>{response.channel_name}</td>
-                  <td>
-                    <div className="answer-chip-list">
-                      {response.answers.slice(0, 3).map((answer) => (
-                        <span className="code-chip" key={answer.question_key}>
-                          {answer.question_key}: {answer.is_pii ? "PII hidden" : String(answer.value)}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td>{response.locale}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <Pagination count={filteredResponses.length} label="responses" />
-        </div>
-      )}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -52,6 +53,19 @@ class Settings(BaseSettings):
         ]
         local_dev_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
         return list(dict.fromkeys([*configured_origins, *local_dev_origins]))
+
+    def process_public_feedback_inline(self) -> bool:
+        """
+        When True, submitting public feedback drains the ingestion queue immediately in the API
+        process (so responses appear without a separate worker).
+
+        Override with FEEDBACK_PROCESS_INLINE=true|false. If unset: enabled for environments
+        local, development, test; disabled otherwise.
+        """
+        raw = os.environ.get("FEEDBACK_PROCESS_INLINE")
+        if raw is not None:
+            return raw.strip().lower() in ("1", "true", "yes")
+        return self.environment.strip().lower() in ("local", "development", "test")
 
 
 @lru_cache

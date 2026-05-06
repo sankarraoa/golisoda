@@ -12,7 +12,8 @@ from app.api.channel_schemas import (
     PublicSubmitResponse,
     PublicSurveyTemplatePayload,
 )
-from app.core.database import get_session
+from app.core.database import get_session, get_session_factory
+from app.core.config import get_settings
 from app.models.channel import FeedbackChannel
 from app.models.enums import ChannelStatus, TenantStatus
 from app.models.survey import SurveyVersion
@@ -20,6 +21,7 @@ from app.models.survey_template import SurveyTemplate
 from app.models.tenant import Location, Tenant, TenantBranding
 from app.schemas.survey_presentation import parse_presentation
 from app.services.feedback_submission import enqueue_public_submission, validate_public_answers
+from app.workers.feedback_submission import process_feedback_submission_batch
 
 router = APIRouter(tags=["public"])
 
@@ -62,6 +64,7 @@ async def get_public_feedback_context(
     snapshot = survey_version.schema_snapshot
     return PublicFeedbackContextResponse(
         channel_code=channel.channel_code,
+        channel_type=channel.channel_type,
         tenant_id=channel.tenant_id,
         location=PublicLocationResponse(
             id=location.id,
@@ -133,5 +136,11 @@ async def submit_public_feedback(
         request_id=request.headers.get("x-request-id"),
         idempotency_key=idempotency_key,
     )
+
+    # Submissions land in FeedbackSubmissionQueue; a worker persists them to responses.
+    # Local/dev defaults to inline processing so a single uvicorn sees data without scripts/process_feedback_queue.py.
+    if get_settings().process_public_feedback_inline():
+        async with get_session_factory()() as worker_session:
+            await process_feedback_submission_batch(session=worker_session, worker_id="api-inline", limit=100)
 
     return PublicSubmitResponse(submitted=True, thank_you_text=branding.thank_you_text)
