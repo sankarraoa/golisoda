@@ -64,15 +64,45 @@ export function FeedbackShell({
     .filter(Boolean)
     .join(" ");
 
+  const formBody = (
+    <>
+      {progress}
+      {header}
+      {children}
+      {footer}
+    </>
+  );
+
+  const isHeritageLuxuryDual = templateSlug === "heritage_luxury";
+
   return (
     <div className={shellClass} data-template={templateSlug}>
-      <form className="public-card" onSubmit={onSubmit}>
-        {progress}
-        {header}
-        {children}
-        {footer}
-      </form>
-      <p className="public-powered">Powered by goliSoda</p>
+      {isHeritageLuxuryDual ? (
+        <div className="heritage-luxury-wrap">
+          <div className="heritage-luxury-frame">
+            <div className="heritage-luxury-grid">
+              <form className="public-card heritage-luxury-card" onSubmit={onSubmit}>
+                {formBody}
+              </form>
+              <aside className="heritage-luxury-hero" aria-hidden>
+                <img
+                  alt=""
+                  decoding="async"
+                  src="/feedback-theme/heritage-luxury-hero.png"
+                />
+              </aside>
+            </div>
+          </div>
+          <p className="public-powered heritage-luxury-powered">Powered by goliSoda</p>
+        </div>
+      ) : (
+        <>
+          <form className="public-card" onSubmit={onSubmit}>
+            {formBody}
+          </form>
+          <p className="public-powered">Powered by goliSoda</p>
+        </>
+      )}
     </div>
   );
 }

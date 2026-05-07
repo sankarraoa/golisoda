@@ -1,0 +1,496 @@
+/**
+ * Heritage luxury dual — slug `heritage_luxury`.
+ * Rose‑champagne field, ornate gold frame, glass form panel, hero portrait column.
+ */
+
+.public-shell[data-template="heritage_luxury"] {
+  --lux-rose: #f3d4cb;
+  --lux-rose-mid: #e8bfb2;
+  --lux-champagne: #faf3ef;
+  --lux-maroon: #5c1528;
+  --lux-maroon-mid: #6b2438;
+  --lux-gold: #c9a227;
+  --lux-gold-bright: #f2d889;
+  --lux-gold-deep: #8a6b1f;
+  --lux-ink: #2d0f18;
+  --lux-soft: rgba(93, 30, 45, 0.72);
+
+  padding: clamp(14px, 3vw, 28px);
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--lux-rose);
+  background-image:
+    radial-gradient(ellipse 140% 80% at 10% -10%, rgba(255, 255, 255, 0.5) 0%, transparent 45%),
+    radial-gradient(ellipse 90% 60% at 90% 10%, rgba(255, 255, 255, 0.25) 0%, transparent 40%),
+    repeating-linear-gradient(
+      132deg,
+      rgba(139, 60, 60, 0.04),
+      rgba(139, 60, 60, 0.04) 1px,
+      transparent 1px,
+      transparent 22px
+    ),
+    radial-gradient(circle at 30% 40%, rgba(255, 200, 180, 0.15) 0%, transparent 50%),
+    linear-gradient(168deg, #f8ded6 0%, var(--lux-rose) 42%, #ebc9bc 100%);
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-wrap {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+/* Ornamental outer frame */
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-frame {
+  position: relative;
+  padding: clamp(12px, 1.8vw, 22px);
+  border: 3px solid transparent;
+  background:
+    linear-gradient(var(--lux-champagne), var(--lux-champagne)) padding-box,
+    linear-gradient(
+        148deg,
+        var(--lux-gold-bright) 0%,
+        var(--lux-gold) 22%,
+        var(--lux-gold-deep) 52%,
+        var(--lux-gold) 72%,
+        var(--lux-gold-bright) 100%
+      )
+      border-box;
+  border-radius: 4px;
+  box-shadow:
+    0 0 0 1px rgba(255, 251, 240, 0.35) inset,
+    0 18px 50px rgba(59, 20, 32, 0.18),
+    0 2px 0 rgba(212, 175, 55, 0.35);
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-frame::before,
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-frame::after {
+  content: "";
+  position: absolute;
+  width: clamp(52px, 8vw, 88px);
+  height: clamp(52px, 8vw, 88px);
+  pointer-events: none;
+  opacity: 0.88;
+  background: no-repeat center / contain;
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-frame::before {
+  top: -2px;
+  left: -2px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none'%3E%3Cpath fill='%23b88620' opacity='0.62' d='M4 4h22v22H4V4Zm34 34h22v22H38V38Z'/%3E%3Cpath stroke='%239a7814' stroke-width='2' opacity='0.85' d='M8 8h14v14H8zm38 38h14v14H46'/%3E%3C/svg%3E");
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-frame::after {
+  bottom: -2px;
+  right: -2px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none'%3E%3Cpath fill='%23b88620' opacity='0.62' d='M38 4h22v22H38V4ZM4 38h22v22H4V38z'/%3E%3Cpath stroke='%239a7814' stroke-width='2' opacity='0.85' d='M42 8h14v14H42zM8 42h14v14H8z'/%3E%3C/svg%3E");
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.06fr) minmax(260px, 0.74fr);
+  align-items: stretch;
+  gap: 0;
+  min-height: min(100vh - 112px, 860px);
+  background: rgba(252, 248, 244, 0.35);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* Glass form column */
+.public-shell[data-template="heritage_luxury"] form.public-card.heritage-luxury-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  margin: 0;
+  overflow: visible;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 0;
+  background-color: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-right: 1px solid rgba(201, 162, 39, 0.35);
+  box-shadow: inset 6px 0 24px rgba(255, 255, 255, 0.45);
+}
+
+/* Lotus mark + headings */
+.public-shell[data-template="heritage_luxury"] .public-header {
+  text-align: center;
+  padding: clamp(26px, 4vw, 40px) clamp(20px, 4vw, 36px) clamp(12px, 2vw, 20px);
+  border-bottom: none;
+  background: transparent;
+}
+
+.public-shell[data-template="heritage_luxury"] .public-header::before {
+  content: "✿";
+  display: block;
+  font-size: clamp(2rem, 5vw, 2.65rem);
+  line-height: 1;
+  margin-bottom: 10px;
+  background: linear-gradient(165deg, var(--lux-gold-bright) 0%, var(--lux-gold) 42%, var(--lux-gold-deep) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 1px 1px rgba(58, 18, 28, 0.12));
+}
+
+.public-shell[data-template="heritage_luxury"] .tenant-logo,
+.public-shell[data-template="heritage_luxury"] .tenant-logo-fallback {
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(212, 175, 39, 0.55);
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.55),
+    0 12px 28px rgba(58, 18, 28, 0.12);
+}
+
+.public-shell[data-template="heritage_luxury"] .tenant-logo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--lux-maroon);
+  background: linear-gradient(180deg, #fffefb, rgba(252, 240, 230, 0.95));
+}
+
+.public-shell[data-template="heritage_luxury"] .public-title {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: clamp(0.92rem, 2.8vw, 1.06rem);
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--lux-maroon-mid);
+  line-height: 1.35;
+}
+
+.public-shell[data-template="heritage_luxury"] .public-subtitle {
+  margin-top: 14px;
+  font-size: 11px;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--lux-soft);
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.public-shell[data-template="heritage_luxury"] .public-subtitle::before,
+.public-shell[data-template="heritage_luxury"] .public-subtitle::after {
+  content: "";
+  display: inline-block;
+  vertical-align: middle;
+  height: 1px;
+  width: clamp(36px, 12vw, 72px);
+  margin: 0 10px;
+  background: linear-gradient(90deg, transparent, var(--lux-gold), transparent);
+  opacity: 0.95;
+}
+
+.public-shell[data-template="heritage_luxury"] .public-progress {
+  display: none;
+}
+
+.public-shell[data-template="heritage_luxury"] .public-body,
+.public-shell[data-template="heritage_luxury"] .public-body--single-page {
+  padding: 8px clamp(18px, 4vw, 34px) 20px;
+  flex: 1;
+}
+
+.public-shell[data-template="heritage_luxury"] .feedback-section {
+  padding: clamp(18px, 3vw, 26px) 0 clamp(20px, 3vw, 28px);
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.public-shell[data-template="heritage_luxury"] .feedback-section:first-of-type {
+  padding-top: 4px;
+}
+
+.public-shell[data-template="heritage_luxury"] .feedback-section + .feedback-section {
+  border-top: 1px solid transparent;
+  border-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(201, 162, 39, 0.55) 18%,
+      rgba(201, 162, 39, 0.55) 82%,
+      transparent
+    )
+    1;
+}
+
+.public-shell[data-template="heritage_luxury"] .question-kicker {
+  display: none;
+}
+
+.public-shell[data-template="heritage_luxury"] .question-title {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.08rem, 3vw, 1.42rem);
+  font-weight: 700;
+  color: var(--lux-maroon);
+  text-align: center;
+  letter-spacing: 0.015em;
+  line-height: 1.42;
+}
+
+.public-shell[data-template="heritage_luxury"] .question-help {
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--lux-soft);
+  margin-top: 8px;
+}
+
+.public-shell[data-template="heritage_luxury"] .answer-area {
+  margin-top: 18px;
+}
+
+/* Gold metallic stars */
+.public-shell[data-template="heritage_luxury"] .csat-stars {
+  gap: 10px;
+  justify-content: center;
+}
+
+.public-shell[data-template="heritage_luxury"] .csat-star-btn {
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(212, 175, 39, 0.45);
+  background: linear-gradient(180deg, #fffefb 0%, #f9f3e8 45%, #f0e4ce 100%);
+  box-shadow: 0 3px 8px rgba(58, 18, 28, 0.08);
+  font-size: 1.95rem;
+  color: transparent;
+}
+
+.public-shell[data-template="heritage_luxury"] .csat-star-glyph {
+  background: linear-gradient(165deg, #fffef0 0%, #ffd65c 38%, var(--lux-gold) 55%, #8a6612 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 1px 0 rgba(255, 252, 240, 0.9))
+    drop-shadow(0 2px 2px rgba(58, 18, 28, 0.18));
+}
+
+.public-shell[data-template="heritage_luxury"] .csat-star-btn:hover {
+  border-color: var(--lux-gold-bright);
+  transform: translateY(-1px);
+}
+
+.public-shell[data-template="heritage_luxury"] .csat-star-btn--selected {
+  border-width: 2px;
+  border-color: var(--lux-maroon);
+  background: linear-gradient(180deg, #fffefb, #fdeed8);
+}
+
+.public-shell[data-template="heritage_luxury"] .csat-star-btn--selected .csat-star-glyph {
+  background: linear-gradient(165deg, #fff8d4 0%, #f0c84a 42%, var(--lux-gold-deep) 92%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.public-shell[data-template="heritage_luxury"] .csat-color-scale-btn {
+  border-color: rgba(201, 162, 39, 0.5);
+}
+
+.public-shell[data-template="heritage_luxury"] .csat-color-scale-btn:hover {
+  border-color: var(--lux-gold);
+}
+
+.public-shell[data-template="heritage_luxury"] .csat-color-scale-btn--selected {
+  border-color: var(--lux-maroon) !important;
+  background: var(--lux-maroon) !important;
+  color: #fffef9 !important;
+  box-shadow: 0 0 0 2px rgba(212, 175, 39, 0.5) !important;
+}
+
+.public-shell[data-template="heritage_luxury"] .option-button {
+  border: 1px solid rgba(201, 162, 39, 0.45);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(252, 244, 234, 0.88));
+  color: var(--lux-ink);
+  border-radius: 10px;
+}
+
+.public-shell[data-template="heritage_luxury"] .option-button--multi-selected {
+  border-color: var(--lux-maroon);
+}
+
+.public-shell[data-template="heritage_luxury"] .field-input,
+.public-shell[data-template="heritage_luxury"] textarea.field-input {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(201, 162, 39, 0.45);
+  border-radius: 10px;
+  color: var(--lux-ink);
+}
+
+.public-shell[data-template="heritage_luxury"] textarea.field-input {
+  min-height: 120px;
+}
+
+/* Footer + CTA */
+.public-shell[data-template="heritage_luxury"] .public-footer.public-footer--heritage-luxury {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 22px clamp(18px, 4vw, 34px) 28px;
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-preview-note {
+  text-align: center;
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-preview-note .text-secondary {
+  color: var(--lux-soft);
+  font-size: var(--text-xs);
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-footer-submit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-footer-submit-row > .btn--ghost {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-submit {
+  flex: 1;
+  min-width: min(100%, 200px);
+  padding: 16px 24px !important;
+  font-family: "Playfair Display", Georgia, serif !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase !important;
+  color: #fffef9 !important;
+  border: none !important;
+  border-radius: 4px !important;
+  box-shadow:
+    0 0 0 1px rgba(244, 220, 150, 0.95),
+    0 0 0 4px rgba(90, 30, 45, 0.65),
+    0 14px 32px rgba(44, 12, 24, 0.28),
+    inset 0 2px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -24px 40px rgba(0, 0, 0, 0.12) !important;
+  background: linear-gradient(180deg, var(--lux-maroon-mid) 0%, var(--lux-maroon) 48%, #3f0f22 100%) !important;
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-submit:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-footer-submit-row .btn--ghost {
+  border: transparent;
+  color: var(--lux-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-footer-closing {
+  margin: 0;
+  padding-top: 4px;
+  text-align: center;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(0.85rem, 2.4vw, 0.97rem);
+  font-style: italic;
+  font-weight: 500;
+  color: var(--lux-maroon);
+  letter-spacing: 0.04em;
+}
+
+.public-shell[data-template="heritage_luxury"] .public-footer .btn--ghost:hover {
+  color: var(--lux-maroon);
+}
+
+.public-shell[data-template="heritage_luxury"] .public-error {
+  color: var(--lux-maroon);
+  background: rgba(92, 21, 40, 0.08);
+  border: 1px solid rgba(92, 21, 40, 0.18);
+}
+
+/* Hero column */
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-hero {
+  position: relative;
+  min-height: 320px;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.2) 0%, transparent 40%),
+    linear-gradient(180deg, var(--lux-maroon) 0%, #2c0e18 98%);
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    90deg,
+    rgba(253, 245, 239, 0.18) 0%,
+    transparent 18%,
+    transparent 85%,
+    rgba(253, 245, 239, 0.12) 100%
+  );
+  pointer-events: none;
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-hero img {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 12%;
+}
+
+.public-shell[data-template="heritage_luxury"] .heritage-luxury-powered {
+  margin-top: 18px;
+  text-align: center;
+  font-size: var(--text-xs);
+  color: rgba(58, 18, 28, 0.38);
+}
+
+@media (max-width: 920px) {
+  .public-shell[data-template="heritage_luxury"] .heritage-luxury-grid {
+    grid-template-columns: 1fr;
+    min-height: unset;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .public-shell[data-template="heritage_luxury"] form.public-card.heritage-luxury-card {
+    border-right: none;
+    border-bottom: 1px solid rgba(201, 162, 39, 0.28);
+    order: 2;
+  }
+
+  .public-shell[data-template="heritage_luxury"] .heritage-luxury-hero {
+    order: 1;
+    min-height: min(42vh, 320px);
+    max-height: 420px;
+  }
+
+  .public-shell[data-template="heritage_luxury"] .heritage-luxury-hero img {
+    object-position: center 8%;
+  }
+}
+
+@media (max-width: 480px) {
+  .public-shell[data-template="heritage_luxury"] {
+    padding: 10px;
+  }
+
+  .public-shell[data-template="heritage_luxury"] .public-subtitle::before,
+  .public-shell[data-template="heritage_luxury"] .public-subtitle::after {
+    width: 28px;
+    margin: 0 8px;
+  }
+}

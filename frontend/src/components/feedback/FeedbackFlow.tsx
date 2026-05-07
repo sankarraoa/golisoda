@@ -31,6 +31,7 @@ export function FeedbackFlow({
   onSubmitAnswers,
   previewBadge,
   disableStepBack = false,
+  surveyDescription = null,
 }: {
   templateSlug: string;
   presentation: SurveyPresentation;
@@ -44,6 +45,8 @@ export function FeedbackFlow({
   previewBadge?: ReactNode;
   /** When true, stepper layouts hide the footer Back control (e.g. one-way QR flows). */
   disableStepBack?: boolean;
+  /** Survey description: `heritage_immersive` ornamental tagline; `heritage_luxury` italic closing under Submit. */
+  surveyDescription?: string | null;
 }) {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
@@ -169,44 +172,105 @@ export function FeedbackFlow({
       </div>
     ) : null;
 
-  const kioskSubmitPhrase = templateSlug === "kiosk_touch" ? "Submit Feedback" : "Submit";
+  const kioskSubmitPhrase =
+    templateSlug === "kiosk_touch"
+      ? "Submit Feedback"
+      : templateSlug === "heritage_luxury"
+        ? "Submit feedback"
+        : "Submit";
 
-  const footer = (
-    <footer className="public-footer">
-      {layout === "stepper" && questionIndex > 0 && !disableStepBack ? (
-        <button
-          className="btn btn--ghost"
-          type="button"
-          onClick={() => {
-            setQuestionIndex((currentIndex) => currentIndex - 1);
-            setFieldError(null);
-          }}
-        >
-          Back
-        </button>
-      ) : (
-        <span />
-      )}
-      {previewBadge ? <span className="text-secondary text-sm">{previewBadge}</span> : null}
+  const heritageFooterTagline =
+    surveyDescription?.trim() || "Your feedback helps us serve you better.";
+
+  const heritageLuxuryClosing = surveyDescription?.trim() || "Thank you!";
+
+  const footerSubmitLabel = isSubmitting
+    ? "Submitting"
+    : layout === "single_page"
+      ? onSubmitAnswers
+        ? kioskSubmitPhrase
+        : "Preview"
+      : isPreview && isLastQuestion
+        ? kioskSubmitPhrase
+        : isLastQuestion
+          ? kioskSubmitPhrase
+          : "Next";
+
+  const backButton =
+    layout === "stepper" && questionIndex > 0 && !disableStepBack ? (
       <button
-        className="btn btn--tenant"
-        disabled={isSubmitting || sortedQuestions.length === 0}
-        type="submit"
+        className="btn btn--ghost"
+        type="button"
+        onClick={() => {
+          setQuestionIndex((currentIndex) => currentIndex - 1);
+          setFieldError(null);
+        }}
       >
-        {isSubmitting
-          ? "Submitting"
-          : layout === "single_page"
-            ? onSubmitAnswers
-              ? kioskSubmitPhrase
-              : "Preview"
-            : isPreview && isLastQuestion
-              ? kioskSubmitPhrase
-              : isLastQuestion
-                ? kioskSubmitPhrase
-                : "Next"}
+        Back
       </button>
-    </footer>
-  );
+    ) : null;
+
+  const footer =
+    templateSlug === "heritage_immersive" ? (
+      <>
+        <footer className="public-footer public-footer--heritage">
+          <div className="heritage-footer-inner">
+            <div className="heritage-footer-tagline-wrap">
+              <p className="heritage-footer-tagline">{heritageFooterTagline}</p>
+            </div>
+            {previewBadge ? (
+              <div className="heritage-footer-preview">
+                <span className="text-secondary text-sm">{previewBadge}</span>
+              </div>
+            ) : null}
+            <div className="heritage-footer-btn-row">
+              {backButton}
+              <button
+                className={`btn btn--tenant heritage-footer-submit${backButton ? "" : " heritage-footer-submit--solo"}`}
+                disabled={isSubmitting || sortedQuestions.length === 0}
+                type="submit"
+              >
+                {footerSubmitLabel}
+              </button>
+            </div>
+          </div>
+        </footer>
+        <div className="heritage-floor" aria-hidden />
+      </>
+    ) : templateSlug === "heritage_luxury" ? (
+      <footer className="public-footer public-footer--heritage-luxury">
+        {previewBadge ? (
+          <div className="heritage-luxury-preview-note">
+            <span className="text-secondary text-sm">{previewBadge}</span>
+          </div>
+        ) : null}
+        <div className="heritage-luxury-footer-submit-row">
+          {backButton}
+          <button
+            className="btn btn--tenant heritage-luxury-submit"
+            disabled={isSubmitting || sortedQuestions.length === 0}
+            type="submit"
+          >
+            {footerSubmitLabel}
+            {footerSubmitLabel === "Submitting" ? null : (
+              <>
+                {" "}
+                »
+              </>
+            )}
+          </button>
+        </div>
+        <p className="heritage-luxury-footer-closing">{heritageLuxuryClosing}</p>
+      </footer>
+    ) : (
+      <footer className="public-footer">
+        {backButton ?? <span />}
+        {previewBadge ? <span className="text-secondary text-sm">{previewBadge}</span> : null}
+        <button className="btn btn--tenant" disabled={isSubmitting || sortedQuestions.length === 0} type="submit">
+          {footerSubmitLabel}
+        </button>
+      </footer>
+    );
 
   let mainBody: ReactNode;
   if (layout === "single_page") {
@@ -263,16 +327,42 @@ export function FeedbackFlow({
     );
   }
 
-  return (
-    <FeedbackShell
-      footer={footer}
-      header={
+  const headerNode =
+    templateSlug === "heritage_immersive" ? (
+      <>
+        <div className="heritage-hero">
+          <div className="heritage-maroon-crown">
+            <div className="heritage-motif-row">
+              <span className="heritage-diya heritage-diya--left" aria-hidden />
+              {branding.logo_url ? (
+                <img alt="" className="heritage-hero-logo" src={branding.logo_url} />
+              ) : (
+                <span className="heritage-motif-center" aria-hidden>
+                  🛕
+                </span>
+              )}
+              <span className="heritage-diya heritage-diya--right" aria-hidden />
+            </div>
+          </div>
+        </div>
         <FeedbackHeader
-          logo={<TenantLogoFeedback branding={branding} surveyTitle={surveyTitle} />}
+          logo={branding.logo_url ? null : <TenantLogoFeedback branding={branding} surveyTitle={surveyTitle} />}
           subtitle={locationName}
           title={surveyTitle}
         />
-      }
+      </>
+    ) : (
+      <FeedbackHeader
+        logo={<TenantLogoFeedback branding={branding} surveyTitle={surveyTitle} />}
+        subtitle={locationName}
+        title={surveyTitle}
+      />
+    );
+
+  return (
+    <FeedbackShell
+      footer={footer}
+      header={headerNode}
       presentation={presentation}
       progress={progressNode}
       templateSlug={templateSlug}

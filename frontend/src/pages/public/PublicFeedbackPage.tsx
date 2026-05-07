@@ -178,6 +178,7 @@ export function PublicFeedbackPage() {
       }}
       presentation={presentation}
       questions={context.questions}
+      surveyDescription={context.survey.description}
       surveyTitle={context.survey.title}
       templateSlug={templateSlug}
       disableStepBack={!isKioskLoop}

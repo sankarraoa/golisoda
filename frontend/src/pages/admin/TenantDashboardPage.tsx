@@ -2099,6 +2099,7 @@ function SurveyBuilderModal({
                   branding={tenantBranding}
                   presentation={previewPresentation}
                   questions={orderedQuestions}
+                  surveyDescription={surveyDetail?.description ?? null}
                   templateSlug={previewSlug}
                   title={surveyDetail?.title ?? "Survey"}
                 />
@@ -2248,12 +2249,14 @@ function SurveyPreview({
   questions,
   templateSlug,
   title,
+  surveyDescription,
 }: {
   branding: TenantBranding;
   presentation: SurveyPresentation;
   questions: SurveyQuestion[];
   templateSlug: string;
   title: string;
+  surveyDescription?: string | null;
 }) {
   const stub = buildPreviewContextStub(
     {
@@ -2267,7 +2270,7 @@ function SurveyPreview({
         id: "preview-survey",
         title,
         slug: "preview",
-        description: null,
+        description: surveyDescription ?? null,
         default_locale: "en",
       },
     },
@@ -2300,6 +2303,7 @@ function SurveyPreview({
         presentation={presentation}
         previewBadge="Preview only"
         questions={publicQuestions}
+        surveyDescription={stub.survey.description}
         surveyTitle={stub.survey.title}
         templateSlug={templateSlug}
       />
@@ -4309,6 +4313,7 @@ function TemplateLibrarySection({
               onSubmitAnswers={null}
               presentation={templatePresentation}
               questions={TEMPLATE_GALLERY_FIXTURE_QUESTIONS}
+              surveyDescription={selected.description ?? null}
               surveyTitle={stub.survey.title}
               templateSlug={selected.slug}
             />

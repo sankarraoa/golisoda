@@ -1,89 +1,181 @@
 /**
- * Heritage immersive template — slug `heritage_immersive`.
- * Luxury kiosk aesthetic for jewellery, saree salons, hospitality-style CX screens.
- * Background tile from `/feedback-theme/heritage-ambient.png` (replace per brand if needed).
+ * Heritage immersive — slug `heritage_immersive`.
+ * South Indian luxury retail: warm cream field, maroon crown + floor, gold filigree,
+ * serif headlines, circular emoji CSAT row. No full-bleed photographs.
  */
 
 .public-shell[data-template="heritage_immersive"] {
-  --heritage-glass: rgba(28, 26, 24, 0.58);
-  --heritage-glass-border: rgba(255, 255, 255, 0.12);
+  --heritage-cream: #f5efe6;
+  --heritage-cream-deep: #ebe2d4;
+  --heritage-maroon: #4f1a28;
+  --heritage-maroon-deep: #3a121c;
+  --heritage-gold: #c9a227;
+  --heritage-gold-muted: rgba(201, 162, 39, 0.65);
+  --heritage-ink: #2c1218;
+  --heritage-ink-soft: #5c3d46;
   padding: 0;
-  justify-content: flex-start;
-  padding-bottom: 48px;
-}
-
-.public-shell[data-template="heritage_immersive"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  background-color: #1a1512;
-  background-image: linear-gradient(190deg, rgba(12, 10, 8, 0.65) 0%, rgba(26, 21, 18, 0.45) 42%, rgba(40, 30, 22, 0.35) 100%),
-    url("/feedback-theme/heritage-ambient.png");
-  background-size: cover;
-  background-position: center top;
+  min-height: 100vh;
+  justify-content: stretch;
+  align-items: stretch;
+  background: var(--heritage-cream);
 }
 
 .public-shell[data-template="heritage_immersive"] > form.public-card {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: min(520px, 92vw);
-  margin: clamp(48px, 10vh, 96px) auto 0;
-  overflow: visible;
-  background: transparent;
-  box-shadow: none;
+  max-width: min(440px, 100%);
+  min-height: min(100vh, 900px);
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--heritage-cream);
   border-radius: 0;
+  box-shadow: 0 0 0 1px rgba(74, 23, 34, 0.08), 0 24px 56px rgba(44, 18, 24, 0.12);
+  display: flex;
+  flex-direction: column;
 }
 
 .public-shell[data-template="heritage_immersive"] .public-progress {
   display: none;
 }
 
+/* ── Hero crown (maroon dome + motif) ─────────────────────────────────── */
+.public-shell[data-template="heritage_immersive"] .heritage-hero {
+  flex-shrink: 0;
+  position: relative;
+  width: 100%;
+  padding: 0;
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-maroon-crown {
+  position: relative;
+  min-height: 128px;
+  padding: clamp(20px, 5vw, 32px) 20px clamp(28px, 6vw, 40px);
+  background-color: var(--heritage-maroon);
+  background-image:
+    repeating-linear-gradient(
+      315deg,
+      transparent,
+      transparent 9px,
+      rgba(0, 0, 0, 0.04) 9px,
+      rgba(0, 0, 0, 0.04) 10px
+    ),
+    radial-gradient(ellipse 120% 80% at 50% 0%, rgba(201, 162, 39, 0.12) 0%, transparent 52%);
+  clip-path: ellipse(92% 100% at 50% 0%);
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-motif-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(14px, 5vw, 28px);
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-diya {
+  width: 26px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50% 50% 45% 45%;
+  background:
+    radial-gradient(ellipse 55% 42% at 50% 72%, #f4d78c 0%, #c9a227 55%, #7a5716 100%),
+    linear-gradient(180deg, #b8891c, #6b4a12);
+  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.25), 0 6px 14px rgba(0, 0, 0, 0.35);
+  position: relative;
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-diya::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 10px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #ffd88a, #c9a227);
+  box-shadow: 0 0 6px #ffcc66;
+}
+.public-shell[data-template="heritage_immersive"] .heritage-motif-center {
+  font-size: clamp(2rem, 9vw, 2.75rem);
+  line-height: 1;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+  user-select: none;
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-hero-logo {
+  width: clamp(52px, 14vw, 76px);
+  height: clamp(52px, 14vw, 76px);
+  object-fit: contain;
+  border-radius: 14px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(244, 215, 140, 0.55);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+/* ── Header / copy (cream sheet) ───────────────────────────────────────── */
 .public-shell[data-template="heritage_immersive"] .public-header {
-  padding: clamp(28px, 5vw, 40px) clamp(22px, 4vw, 36px);
+  padding: clamp(18px, 4vw, 28px) clamp(20px, 5vw, 32px) clamp(8px, 2vw, 12px);
   border: none;
   background: transparent;
+  text-align: center;
 }
 
 .public-shell[data-template="heritage_immersive"] .tenant-logo,
 .public-shell[data-template="heritage_immersive"] .tenant-logo-fallback {
-  width: 72px;
-  height: 72px;
-  margin-bottom: 20px;
-  filter: drop-shadow(0 2px 18px rgba(0, 0, 0, 0.45));
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  border-radius: 12px;
+  object-fit: contain;
+  border: 2px solid var(--heritage-gold-muted);
+  box-shadow: 0 6px 18px rgba(58, 18, 28, 0.12);
+}
+
+.public-shell[data-template="heritage_immersive"] .tenant-logo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--heritage-maroon);
+  background: linear-gradient(165deg, #fffef8, var(--heritage-cream-deep));
 }
 
 .public-shell[data-template="heritage_immersive"] .public-title {
-  color: #faf8f5;
+  color: var(--heritage-ink);
   font-family: Georgia, "Times New Roman", Times, serif;
-  font-size: clamp(1.5rem, 4.5vw, 2rem);
+  font-size: clamp(1.65rem, 5vw, 2.1rem);
   font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: none;
-  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  text-shadow: none;
 }
 
 .public-shell[data-template="heritage_immersive"] .public-subtitle {
   margin-top: 10px;
-  color: rgba(250, 248, 245, 0.72);
+  color: var(--heritage-ink-soft);
   font-size: var(--text-sm);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: var(--font-medium);
 }
 
 .public-shell[data-template="heritage_immersive"] .public-body,
 .public-shell[data-template="heritage_immersive"] .public-body--single-page {
-  padding: 0 clamp(16px, 4vw, 28px) 28px;
+  padding: 8px clamp(16px, 4vw, 24px) clamp(12px, 3vw, 20px);
+  flex: 1;
 }
 
 .public-shell[data-template="heritage_immersive"] .feedback-section {
-  padding: clamp(22px, 4vw, 32px) clamp(20px, 4vw, 28px) clamp(28px, 5vw, 36px);
-  border-radius: 14px;
-  background: var(--heritage-glass);
-  border: 1px solid var(--heritage-glass-border);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.42);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  margin-top: 4px;
+  padding: clamp(20px, 4vw, 28px) clamp(18px, 3vw, 24px) clamp(22px, 4vw, 30px);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(245, 239, 230, 0.92));
+  border: 1px solid rgba(201, 162, 39, 0.35);
+  box-shadow: 0 16px 36px rgba(58, 18, 28, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .public-shell[data-template="heritage_immersive"] .question-kicker {
@@ -91,108 +183,288 @@
 }
 
 .public-shell[data-template="heritage_immersive"] .question-title {
-  color: #faf8f5;
-  font-size: clamp(1.125rem, 3vw, 1.35rem);
-  font-weight: var(--font-medium);
-  font-family: var(--font-sans);
+  color: var(--heritage-ink);
+  font-size: clamp(1.05rem, 3vw, 1.2rem);
+  font-weight: var(--font-semibold, 600);
+  font-family: Georgia, "Times New Roman", serif;
   line-height: 1.45;
-  letter-spacing: 0.02em;
-  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.4);
+  letter-spacing: 0.01em;
+  text-align: center;
 }
 
 .public-shell[data-template="heritage_immersive"] .question-help {
-  color: rgba(250, 248, 245, 0.78);
+  color: var(--heritage-ink-soft);
+  text-align: center;
+  font-size: var(--text-sm);
 }
 
 .public-shell[data-template="heritage_immersive"] .answer-area {
-  margin-top: 28px;
+  margin-top: 22px;
 }
 
+/* Star CSAT (still supported) */
 .public-shell[data-template="heritage_immersive"] .csat-stars {
   gap: 12px;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .public-shell[data-template="heritage_immersive"] .csat-star-btn {
-  min-width: 52px;
-  min-height: 52px;
-  font-size: 2.25rem;
-  color: rgba(255, 255, 255, 0.35);
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: var(--radius-md);
+  min-width: 48px;
+  min-height: 48px;
+  font-size: 1.85rem;
+  color: rgba(92, 61, 70, 0.35);
+  background: rgba(255, 254, 248, 0.9);
+  border: 2px solid rgba(201, 162, 39, 0.35);
+  border-radius: var(--radius-full);
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.9);
 }
 
 .public-shell[data-template="heritage_immersive"] .csat-star-btn:hover {
-  color: rgba(255, 255, 255, 0.75);
-  border-color: rgba(255, 255, 255, 0.5);
+  color: rgba(201, 162, 39, 0.95);
+  border-color: var(--heritage-gold);
 }
 
 .public-shell[data-template="heritage_immersive"] .csat-star-btn--selected {
-  color: #f5e6c8;
-  border-color: rgba(212, 175, 106, 0.85);
-  background: rgba(212, 175, 106, 0.12);
-  text-shadow: 0 0 20px rgba(212, 175, 106, 0.45);
+  color: #b8891c;
+  border-color: var(--heritage-gold);
+  background: linear-gradient(165deg, #fff9e6, #f3e4c2);
+  box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.35);
 }
 
-.public-shell[data-template="heritage_immersive"] .public-footer {
-  position: relative;
-  z-index: 1;
-  padding: 20px clamp(20px, 5vw, 32px) 32px;
+/* Emoji CSAT — circular faces on cream */
+.public-shell[data-template="heritage_immersive"] .emoji-scale--csat .emoji-scale-row {
+  justify-content: center;
+  gap: clamp(6px, 2vw, 14px);
+}
+
+.public-shell[data-template="heritage_immersive"] .emoji-scale--csat .emoji-scale-button {
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 54px;
+  padding: 10px 8px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 254, 248, 0.95);
+  border: 2px solid rgba(201, 162, 39, 0.28);
+  box-shadow: 0 4px 12px rgba(58, 18, 28, 0.06);
+}
+
+.public-shell[data-template="heritage_immersive"] .emoji-scale--csat .emoji-scale-glyph {
+  font-size: clamp(1.65rem, 5vw, 2rem);
+  line-height: 1;
+}
+
+.public-shell[data-template="heritage_immersive"] .emoji-scale--csat .emoji-scale-caption {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--heritage-ink-soft);
+  font-weight: var(--font-medium);
+  text-align: center;
+  max-width: 72px;
+}
+
+.public-shell[data-template="heritage_immersive"] .emoji-scale--csat .emoji-scale-button:hover {
+  border-color: var(--heritage-gold);
+}
+
+.public-shell[data-template="heritage_immersive"] .emoji-scale--csat .emoji-scale-button--selected {
+  border-color: var(--heritage-gold);
+  background: linear-gradient(180deg, #fff9e8, #f5e8c8);
+  box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.25);
+}
+
+.public-shell[data-template="heritage_immersive"] .emoji-scale--csat .emoji-scale-button--selected .emoji-scale-caption {
+  color: var(--heritage-maroon);
+  font-weight: var(--font-semibold, 600);
+}
+
+/* ── Footer: gold rules + tagline + CTA ────────────────────────────────── */
+.public-shell[data-template="heritage_immersive"] .public-footer.public-footer--heritage {
+  display: block;
+  padding: 20px clamp(18px, 4vw, 28px) 0;
+  margin: 0;
+  max-width: none;
+  width: 100%;
   border: none;
   background: transparent;
-  max-width: min(520px, 92vw);
-  margin: 0 auto;
-  width: 100%;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 12px;
 }
 
-.public-shell[data-template="heritage_immersive"] .public-footer .btn--ghost {
-  color: rgba(250, 248, 245, 0.55);
-  border-color: transparent;
+.public-shell[data-template="heritage_immersive"] .heritage-footer-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
 }
 
-.public-shell[data-template="heritage_immersive"] .public-footer .btn--tenant {
-  background: rgba(250, 248, 245, 0.96);
-  color: #1a1512;
-  border: none;
-  font-weight: var(--font-medium);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
-}
-
-.public-shell[data-template="heritage_immersive"] .public-footer .btn--tenant:hover:not(:disabled) {
-  background: #fff;
-}
-
-.public-shell[data-template="heritage_immersive"] .public-error {
-  color: #ffb4a8;
-  background: rgba(80, 20, 20, 0.45);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
-}
-
-.public-shell[data-template="heritage_immersive"] .public-powered {
+.public-shell[data-template="heritage_immersive"] .heritage-footer-tagline-wrap {
   position: relative;
-  z-index: 1;
-  margin-top: 12px;
-  color: rgba(250, 248, 245, 0.38);
+  text-align: center;
+  padding: 8px 0 4px;
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-footer-tagline-wrap::before,
+.public-shell[data-template="heritage_immersive"] .heritage-footer-tagline-wrap::after {
+  content: "";
+  display: block;
+  height: 1px;
+  max-width: 220px;
+  margin-left: auto;
+  margin-right: auto;
+  background: linear-gradient(90deg, transparent, var(--heritage-gold), transparent);
+  opacity: 0.85;
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-footer-tagline-wrap::before {
+  margin-bottom: 14px;
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-footer-tagline-wrap::after {
+  margin-top: 14px;
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-footer-tagline {
+  margin: 0;
+  padding: 0 clamp(8px, 3vw, 16px);
+  color: var(--heritage-ink-soft);
+  font-size: clamp(0.875rem, 2.8vw, 1rem);
+  font-weight: var(--font-medium);
+  font-family: var(--font-sans);
+  letter-spacing: 0.03em;
+  line-height: 1.45;
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-footer-preview {
+  text-align: center;
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-footer-preview .text-secondary {
+  color: var(--heritage-ink-soft);
+  margin: 0;
   font-size: var(--text-xs);
 }
 
-/* Non-star controls: keep legible on glass */
+.public-shell[data-template="heritage_immersive"] .heritage-footer-btn-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-footer-btn-row .btn--ghost {
+  flex-shrink: 0;
+  align-self: center;
+  padding-left: 4px;
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-footer-submit {
+  flex: 1;
+  min-height: 50px;
+}
+
+.public-shell[data-template="heritage_immersive"] .heritage-footer-submit--solo {
+  flex: none;
+  width: 100%;
+}
+
+.public-shell[data-template="heritage_immersive"] .public-footer .btn--ghost {
+  color: var(--heritage-ink-soft);
+  border-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.public-shell[data-template="heritage_immersive"] .public-footer .btn--ghost:hover {
+  color: var(--heritage-maroon);
+}
+
+.public-shell[data-template="heritage_immersive"] .public-footer .btn--tenant {
+  background: var(--heritage-maroon);
+  color: #fffef8;
+  border: none;
+  font-weight: var(--font-semibold, 600);
+  padding: 14px 28px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(58, 18, 28, 0.28);
+  letter-spacing: 0.04em;
+}
+
+.public-shell[data-template="heritage_immersive"] .public-footer .btn--tenant:hover:not(:disabled) {
+  background: var(--heritage-maroon-deep);
+}
+
+.public-shell[data-template="heritage_immersive"] .public-error {
+  color: #8b1d2d;
+  background: rgba(139, 29, 45, 0.08);
+  border: 1px solid rgba(139, 29, 45, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+
+.public-shell[data-template="heritage_immersive"] .public-powered {
+  margin: 12px auto 20px;
+  padding: 0 16px;
+  color: rgba(44, 18, 24, 0.38);
+  font-size: var(--text-xs);
+}
+
+/* Maroon floor band — lotus-adjacent rhythm */
+.public-shell[data-template="heritage_immersive"] .heritage-floor {
+  flex-shrink: 0;
+  height: 56px;
+  margin-top: 8px;
+  background-color: var(--heritage-maroon-deep);
+  background-image:
+    radial-gradient(
+      circle at 50% 0,
+      rgba(201, 162, 39, 0.22) 0%,
+      rgba(201, 162, 39, 0.08) 35%,
+      transparent 70%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 22px,
+      rgba(201, 162, 39, 0.18) 22px,
+      rgba(201, 162, 39, 0.18) 23px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(201, 162, 39, 0.12) 0,
+      rgba(201, 162, 39, 0.12) 8px,
+      transparent 8px,
+      transparent 36px
+    );
+  box-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
 .public-shell[data-template="heritage_immersive"] .field-input,
 .public-shell[data-template="heritage_immersive"] textarea.field-input {
-  background: rgba(12, 10, 8, 0.35);
-  border-color: rgba(255, 255, 255, 0.18);
-  color: #faf8f5;
+  background: rgba(255, 254, 248, 0.95);
+  border-color: rgba(201, 162, 39, 0.4);
+  color: var(--heritage-ink);
+  border-radius: 12px;
 }
 
 .public-shell[data-template="heritage_immersive"] .option-button,
 .public-shell[data-template="heritage_immersive"] .scale-button {
-  background: rgba(12, 10, 8, 0.25);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #faf8f5;
+  background: rgba(255, 254, 248, 0.9);
+  border: 2px solid rgba(201, 162, 39, 0.3);
+  color: var(--heritage-ink);
+  border-radius: 14px;
+}
+
+.public-shell[data-template="heritage_immersive"] .option-button:hover,
+.public-shell[data-template="heritage_immersive"] .scale-button:hover {
+  border-color: var(--heritage-gold);
+}
+
+@media (max-width: 480px) {
+  .public-shell[data-template="heritage_immersive"] .public-body,
+  .public-shell[data-template="heritage_immersive"] .public-footer {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
 }

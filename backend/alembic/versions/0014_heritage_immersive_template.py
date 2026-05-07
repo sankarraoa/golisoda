@@ -18,7 +18,7 @@ depends_on: str | Sequence[str] | None = None
 
 TEMPLATE_HERITAGE_IMMERSIVE = UUID("f0000004-0000-4000-a000-000000000004")
 
-HERITAGE_PRESENTATION = """{"layout":"single_page","nps":{"presentation":"numeric"},"csat_5":{"renderer":"stars"},"csat_4":{"renderer":"stars"},"csat_2":{"renderer":"emoji_2"},"progress":{"style":"none"},"navigation":{"auto_advance":false},"touch":{"large_targets":true}}"""
+HERITAGE_PRESENTATION = """{"layout":"single_page","nps":{"presentation":"numeric"},"csat_5":{"renderer":"emoji_5"},"csat_4":{"renderer":"emoji_4"},"csat_2":{"renderer":"emoji_2"},"progress":{"style":"none"},"navigation":{"auto_advance":false},"touch":{"large_targets":true}}"""
 
 
 def upgrade() -> None:
@@ -38,12 +38,13 @@ def upgrade() -> None:
             "slug": "heritage_immersive",
             "name": "Heritage immersive",
             "description": (
-                "Full-screen concierge-style kiosk: tenant logo, glass question panel, and star ratings—"
-                "ideal for jewellery, saree salons, hospitality, and premium retailers."
+                "Cream sheet, maroon crown and floor band, gold filigree cues, and serif headlines—built for jewellery, saree "
+                "salons, and hospitality flows. Emoji CSAT by default."
             ),
             "notes": (
-                "Optimized for single-page surveys with CSAT stars. Uses an ambient art layer; "
-                "replace /feedback-theme/heritage-ambient.png in the app for bespoke brand imagery."
+                "Optimized for single-page surveys. Face-scale CSAT (emoji) matches premium retail flows; admins can swap to "
+                "stars via presentation. Palette is CSS (cream/maroon/gold)—optional tenant logo in branding beside the motif. "
+                "Uses survey.description as the ornamental footer tagline."
             ),
             "presentation": HERITAGE_PRESENTATION,
             "sort_order": 25,
