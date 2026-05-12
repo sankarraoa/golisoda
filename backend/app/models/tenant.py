@@ -1,7 +1,8 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,6 +24,12 @@ class Tenant(UuidPrimaryKeyMixin, TimestampMixin, Base):
     suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     offboarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    address_line1: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    address_state: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    address_postal_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
     branding: Mapped["TenantBranding"] = relationship(
         back_populates="tenant",
         cascade="all, delete-orphan",
@@ -43,6 +50,11 @@ class TenantBranding(UuidPrimaryKeyMixin, TimestampMixin, Base):
     logo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     primary_color: Mapped[str | None] = mapped_column(String(16), nullable=True)
     secondary_color: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    theme_overrides: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
     thank_you_text: Mapped[str] = mapped_column(
         Text,
         nullable=False,

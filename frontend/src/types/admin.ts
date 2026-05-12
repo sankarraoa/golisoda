@@ -24,6 +24,11 @@ export type Tenant = {
   slug: string;
   default_locale: string;
   status: "active" | "suspended" | "offboarded";
+  address_line1: string | null;
+  address_line2: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_postal_code: string | null;
   created_at: string;
   updated_at: string;
 };

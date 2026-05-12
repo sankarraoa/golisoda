@@ -8,7 +8,7 @@ import "./styles/admin.css";
 import "./styles/public-feedback.css";
 import "./styles/public-feedback-kiosk.css";
 import "./styles/public-feedback-heritage.css";
-import "./styles/public-feedback-heritage-luxury.css";
+import "./styles/public-feedback-jewelry-card.css";
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>

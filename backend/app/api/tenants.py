@@ -1,7 +1,8 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import httpx
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,7 @@ from app.api.tenant_schemas import (
     LocationCreateRequest,
     LocationResponse,
     LocationUpdateRequest,
+    LogoImportUrlRequest,
     PermissionResponse,
     RoleAssignmentRequest,
     RoleBindingResponse,
@@ -20,6 +22,7 @@ from app.api.tenant_schemas import (
     RoleUpdateRequest,
     TenantCreateRequest,
     TenantResponse,
+    TenantUpdateRequest,
     TenantUserCreateRequest,
     TenantUserResponse,
     TenantUserUpdateRequest,
@@ -29,6 +32,7 @@ from app.auth.dependencies import get_current_principal
 from app.auth.passwords import hash_password
 from app.auth.principal import Principal
 from app.auth.role_rules import require_valid_role_scope
+from app.core.config import get_settings
 from app.core.database import get_session
 from app.models.auth import Permission, Role, RolePermission, User, UserRoleBinding
 from app.models.enums import (
@@ -40,11 +44,25 @@ from app.models.enums import (
     UserStatus,
 )
 from app.models.tenant import Location, Tenant, TenantBranding
+from app.schemas.survey_theme import SurveyThemeConfig
 from app.services.audit import write_audit_log
+from app.services.branding_assets import (
+    BrandingAssetError,
+    download_logo_bytes,
+    public_logo_url,
+    remove_local_logo_file,
+    validate_and_prepare_logo_bytes,
+    write_logo_file,
+)
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
 ROLE_DEFAULTS: dict[str, dict[str, object]] = {
+    "platform_super_admin": {
+        "name": "Platform Super Admin",
+        "description": "Platform console access and full tenant administration.",
+        "permissions": [permission for permission in PermissionCode],
+    },
     "tenant_admin": {
         "name": "Tenant Admin",
         "description": "Full organization administration.",
@@ -282,6 +300,39 @@ async def get_tenant(
     return TenantResponse.model_validate(tenant, from_attributes=True)
 
 
+@router.patch("/{tenant_id}", response_model=TenantResponse)
+async def update_tenant_profile(
+    tenant_id: UUID,
+    payload: TenantUpdateRequest,
+    request: Request,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> TenantResponse:
+    require_permission(principal, PermissionCode.TENANT_UPDATE)
+    require_tenant_scope(principal, tenant_id)
+    tenant = await get_tenant_or_404(session, tenant_id)
+    update_data = payload.model_dump(exclude_unset=True)
+    if not update_data:
+        return TenantResponse.model_validate(tenant, from_attributes=True)
+    for field_name, value in update_data.items():
+        setattr(tenant, field_name, value)
+    await write_audit_log(
+        session,
+        actor_type=AuditActorType.USER,
+        actor_id=str(principal.user_id),
+        tenant_id=tenant_id,
+        action=AuditAction.TENANT_ACCESS,
+        outcome=AuditOutcome.SUCCESS,
+        resource_type="tenant",
+        resource_id=str(tenant.id),
+        request_id=getattr(request.state, "request_id", None),
+        metadata={"operation": "update_tenant_profile", "fields": sorted(update_data.keys())},
+    )
+    await session.commit()
+    await session.refresh(tenant)
+    return TenantResponse.model_validate(tenant, from_attributes=True)
+
+
 @router.get("/{tenant_id}/branding", response_model=BrandingResponse)
 async def get_branding(
     tenant_id: UUID,
@@ -311,7 +362,30 @@ async def update_branding(
     await get_tenant_or_404(session, tenant_id)
 
     branding = await get_branding_or_create(session, tenant_id)
+    settings = get_settings()
     update_data = payload.model_dump(exclude_unset=True)
+
+    if "logo_url" in update_data:
+        if update_data["logo_url"] is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Logo cannot be set via this endpoint. Upload a file (POST branding/logo-file) "
+                    "or import from a URL (POST branding/logo-import-url)."
+                ),
+            )
+        remove_local_logo_file(
+            branding.logo_url,
+            tenant_id=tenant_id,
+            upload_root=settings.tenant_branding_storage_path,
+        )
+        branding.logo_url = None
+        del update_data["logo_url"]
+
+    if "theme_overrides" in update_data and update_data["theme_overrides"] is not None:
+        # Raises ValueError → FastAPI returns 422 with field-level details.
+        SurveyThemeConfig(tokens=update_data["theme_overrides"])
+
     for field_name, value in update_data.items():
         setattr(branding, field_name, value)
 
@@ -330,6 +404,101 @@ async def update_branding(
     await session.commit()
     await session.refresh(branding)
     return BrandingResponse.model_validate(branding, from_attributes=True)
+
+
+async def _persist_logo_bytes_and_response(
+    *,
+    session: AsyncSession,
+    tenant_id: UUID,
+    raw_in: bytes,
+    principal: Principal,
+    request: Request,
+    branding: TenantBranding,
+) -> BrandingResponse:
+    settings = get_settings()
+    upload_root = settings.tenant_branding_storage_path
+    try:
+        raw, ext = validate_and_prepare_logo_bytes(raw_in)
+        filename = write_logo_file(upload_root, tenant_id, raw, ext)
+    except BrandingAssetError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    remove_local_logo_file(branding.logo_url, tenant_id=tenant_id, upload_root=upload_root)
+    branding.logo_url = public_logo_url(
+        api_public_origin=settings.api_public_origin,
+        tenant_id=tenant_id,
+        filename=filename,
+    )
+    await write_audit_log(
+        session,
+        actor_type=AuditActorType.USER,
+        actor_id=str(principal.user_id),
+        tenant_id=tenant_id,
+        action=AuditAction.TENANT_ACCESS,
+        outcome=AuditOutcome.SUCCESS,
+        resource_type="tenant_branding",
+        resource_id=str(branding.id),
+        request_id=getattr(request.state, "request_id", None),
+        metadata={"operation": "branding_logo_local_store"},
+    )
+    await session.commit()
+    await session.refresh(branding)
+    return BrandingResponse.model_validate(branding, from_attributes=True)
+
+
+@router.post("/{tenant_id}/branding/logo-file", response_model=BrandingResponse)
+async def upload_branding_logo_file(
+    tenant_id: UUID,
+    request: Request,
+    file: Annotated[UploadFile, File(description="PNG, JPEG, or WebP; max 5 MB")],
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> BrandingResponse:
+    require_permission(principal, PermissionCode.BRANDING_UPDATE)
+    require_tenant_scope(principal, tenant_id)
+    await get_tenant_or_404(session, tenant_id)
+    branding = await get_branding_or_create(session, tenant_id)
+    raw_in = await file.read()
+    return await _persist_logo_bytes_and_response(
+        session=session,
+        tenant_id=tenant_id,
+        raw_in=raw_in,
+        principal=principal,
+        request=request,
+        branding=branding,
+    )
+
+
+@router.post("/{tenant_id}/branding/logo-import-url", response_model=BrandingResponse)
+async def import_branding_logo_from_url(
+    tenant_id: UUID,
+    payload: LogoImportUrlRequest,
+    request: Request,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> BrandingResponse:
+    require_permission(principal, PermissionCode.BRANDING_UPDATE)
+    require_tenant_scope(principal, tenant_id)
+    await get_tenant_or_404(session, tenant_id)
+    branding = await get_branding_or_create(session, tenant_id)
+    try:
+        raw_fetch = await download_logo_bytes(payload.url)
+    except BrandingAssetError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=f"Could not download image ({exc}).",
+        ) from exc
+
+    return await _persist_logo_bytes_and_response(
+        session=session,
+        tenant_id=tenant_id,
+        raw_in=raw_fetch,
+        principal=principal,
+        request=request,
+        branding=branding,
+    )
 
 
 @router.get("/{tenant_id}/permissions", response_model=list[PermissionResponse])

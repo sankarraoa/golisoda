@@ -140,8 +140,8 @@ export const TEMPLATE_GALLERY_FIXTURE_QUESTIONS: PublicQuestion[] = [
 
 export function buildPreviewContextStub(
   branding: PublicBranding,
-  overrides: Partial<Pick<PublicFeedbackContext, "survey" | "location">> = {},
-): Pick<PublicFeedbackContext, "branding" | "survey" | "location"> {
+  overrides: Partial<Pick<PublicFeedbackContext, "survey" | "location" | "organization">> = {},
+): Pick<PublicFeedbackContext, "branding" | "survey" | "location" | "organization"> {
   return {
     branding,
     survey: overrides.survey ?? {
@@ -156,6 +156,14 @@ export function buildPreviewContextStub(
       name: "Downtown café",
       city: null,
       region: null,
+    },
+    organization: overrides.organization ?? {
+      name: "Heritage Luxe Jewellers",
+      address_line1: "12 Connaught Place",
+      address_line2: "First Floor, Block A",
+      city: "New Delhi",
+      region: "Delhi",
+      postal_code: "110001",
     },
   };
 }

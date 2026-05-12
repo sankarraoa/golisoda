@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import SurveyStatus, SurveyVersionStatus
 from app.models.survey import Question, QuestionOption, Survey, SurveyVersion
+from app.models.survey_template import SurveyTemplate
+from app.models.tenant import TenantBranding
 
 
 async def build_schema_snapshot(session: AsyncSession, survey: Survey) -> dict:
@@ -54,6 +56,36 @@ async def build_schema_snapshot(session: AsyncSession, survey: Survey) -> dict:
         },
         "questions": questions,
     }
+
+
+def resolve_effective_theme(template: SurveyTemplate, branding: TenantBranding) -> dict[str, str]:
+    """Resolve the theme token set used for public rendering.
+
+    Merge order:
+    - Start with `survey_templates.theme` (template defaults)
+    - Overlay `tenant_branding.theme_overrides` (tenant wins)
+
+    Transitional behavior (back-compat):
+    - If `tenant_branding.primary_color` is set, DO NOT return `color.brand.primary` even if the
+      template or overrides define it. The legacy branding columns remain the source of truth
+      for tenants who already use them, so their appearance doesn't silently change.
+    - Same rule for `tenant_branding.secondary_color` and `color.brand.secondary`.
+
+    TODO: consolidate legacy branding columns into theme_overrides and remove this suppression.
+    """
+
+    merged: dict[str, str] = {}
+    if isinstance(getattr(template, "theme", None), dict):
+        merged.update({k: v for k, v in template.theme.items() if isinstance(k, str) and isinstance(v, str)})
+    if isinstance(getattr(branding, "theme_overrides", None), dict):
+        merged.update({k: v for k, v in branding.theme_overrides.items() if isinstance(k, str) and isinstance(v, str)})
+
+    if branding.primary_color:
+        merged.pop("color.brand.primary", None)
+    if branding.secondary_color:
+        merged.pop("color.brand.secondary", None)
+
+    return merged
 
 
 async def publish_survey_version(

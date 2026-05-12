@@ -22,6 +22,8 @@ import type {
 } from "../types/admin";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+/** Split deploy: base URL for Template Admin service (`/survey-templates`). Defaults to main API when monolithic.*/
+const TEMPLATE_API_BASE_URL = import.meta.env.VITE_TEMPLATE_API_BASE_URL ?? API_BASE_URL;
 const ACCESS_TOKEN_KEY = "goliSoda.accessToken";
 const REFRESH_TOKEN_KEY = "goliSoda.refreshToken";
 
@@ -42,6 +44,57 @@ export function storeTokens(tokens: TokenResponse): void {
 export function clearStoredTokens(): void {
   window.localStorage.removeItem(ACCESS_TOKEN_KEY);
   window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+type AuthenticatedFetchOptions = RequestInit & { baseUrl?: string };
+
+async function errorMessageFromResponse(response: Response): Promise<string> {
+  try {
+    const body = await response.json();
+    if (typeof body.detail === "string") {
+      return body.detail;
+    }
+    if (Array.isArray(body.detail)) {
+      return body.detail
+        .map((item: ApiValidationError) => {
+          const fieldPath = Array.isArray(item.loc) ? item.loc.join(".") : "field";
+          return `${fieldPath}: ${item.msg ?? "Invalid value"}`;
+        })
+        .join(" ");
+    }
+  } catch {
+    return "We could not load this page.";
+  }
+  return "We could not load this page.";
+}
+
+async function authenticatedFetch<T>(
+  path: string,
+  token: string,
+  options: AuthenticatedFetchOptions = {},
+): Promise<T> {
+  const { baseUrl, headers, ...rest } = options;
+  const resolvedBase = baseUrl ?? API_BASE_URL;
+
+  const response = await fetch(`${resolvedBase}${path}`, {
+    ...rest,
+    headers: {
+      ...(rest.body ? { "Content-Type": "application/json" } : {}),
+      ...headers,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (response.status === 401) {
+    clearStoredTokens();
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+
+  if (!response.ok) {
+    throw new Error(await errorMessageFromResponse(response));
+  }
+
+  return response.json();
 }
 
 export function channelQrDownloadUrl(
@@ -106,7 +159,9 @@ export async function fetchTenantDashboard(
     can("survey:read")
       ? authenticatedFetch<SurveyVersion[]>(`/tenants/${tenantId}/surveys/versions`, token)
       : [],
-    canTemplates ? authenticatedFetch<SurveyTemplate[]>("/survey-templates", token) : Promise.resolve([]),
+    canTemplates
+      ? authenticatedFetch<SurveyTemplate[]>("/survey-templates", token, { baseUrl: TEMPLATE_API_BASE_URL })
+      : Promise.resolve([]),
     can("channel:read") ? authenticatedFetch<Channel[]>(`/tenants/${tenantId}/channels`, token) : [],
     can("user:read") ? authenticatedFetch<TenantUser[]>(`/tenants/${tenantId}/users`, token) : [],
     can("role:read") ? authenticatedFetch<Role[]>(`/tenants/${tenantId}/roles`, token) : [],
@@ -342,6 +397,20 @@ export async function downloadChannelQr(
   window.URL.revokeObjectURL(url);
 }
 
+export async function fetchChannelQrPngBlob(
+  token: string,
+  tenantId: string,
+  channelId: string,
+): Promise<Blob> {
+  const response = await fetch(channelQrDownloadUrl(tenantId, channelId, "png"), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    throw new Error(await errorMessageFromResponse(response));
+  }
+  return response.blob();
+}
+
 export async function createTenantUser(
   token: string,
   tenantId: string,
@@ -439,6 +508,53 @@ export async function updateTenantBranding(
   });
 }
 
+export async function patchTenantProfile(
+  token: string,
+  tenantId: string,
+  payload: {
+    name?: string;
+    address_line1?: string | null;
+    address_line2?: string | null;
+    address_city?: string | null;
+    address_state?: string | null;
+    address_postal_code?: string | null;
+  },
+): Promise<Tenant> {
+  return authenticatedFetch<Tenant>(`/tenants/${tenantId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadTenantBrandingLogoFile(
+  token: string,
+  tenantId: string,
+  file: File,
+): Promise<TenantBranding> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${API_BASE_URL}/tenants/${tenantId}/branding/logo-file`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  if (!response.ok) {
+    throw new Error(await errorMessageFromResponse(response));
+  }
+  return response.json() as Promise<TenantBranding>;
+}
+
+export async function importTenantBrandingLogoFromUrl(
+  token: string,
+  tenantId: string,
+  url: string,
+): Promise<TenantBranding> {
+  return authenticatedFetch<TenantBranding>(`/tenants/${tenantId}/branding/logo-import-url`, token, {
+    method: "POST",
+    body: JSON.stringify({ url }),
+  });
+}
+
 export async function fetchSurveyDetail(
   token: string,
   tenantId: string,
@@ -494,29 +610,20 @@ export async function updateSurveyQuestion(
   );
 }
 
-/** Partial PATCH (e.g. sort_order-only) — omit unset fields. */
+/** Partial PATCH (e.g. sort_order-only) - omit unset fields. */
 export async function patchSurveyQuestion(
   token: string,
   tenantId: string,
   surveyId: string,
   questionId: string,
-  patch: Partial<{
-    question_key: string;
-    question_type: QuestionType;
-    prompt: string;
-    help_text: string | undefined;
-    is_required: boolean;
-    is_pii: boolean;
-    sort_order: number;
-    options: Array<{ value: string; label: string; sort_order: number }>;
-  }>,
+  questionPatch: Record<string, unknown>,
 ): Promise<SurveyQuestion> {
   return authenticatedFetch<SurveyQuestion>(
     `/tenants/${tenantId}/surveys/${surveyId}/questions/${questionId}`,
     token,
     {
       method: "PATCH",
-      body: JSON.stringify(patch),
+      body: JSON.stringify(questionPatch),
     },
   );
 }
@@ -529,50 +636,4 @@ export async function publishSurvey(
   return authenticatedFetch<SurveyVersion>(`/tenants/${tenantId}/surveys/${surveyId}/publish`, token, {
     method: "POST",
   });
-}
-
-async function authenticatedFetch<T>(
-  path: string,
-  token: string,
-  options: RequestInit = {},
-): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...options.headers,
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (response.status === 401) {
-    clearStoredTokens();
-    throw new Error("Your session has expired. Please sign in again.");
-  }
-
-  if (!response.ok) {
-    throw new Error(await errorMessageFromResponse(response));
-  }
-
-  return response.json();
-}
-
-async function errorMessageFromResponse(response: Response): Promise<string> {
-  try {
-    const body = await response.json();
-    if (typeof body.detail === "string") {
-      return body.detail;
-    }
-    if (Array.isArray(body.detail)) {
-      return body.detail
-        .map((item: ApiValidationError) => {
-          const path = Array.isArray(item.loc) ? item.loc.join(".") : "field";
-          return `${path}: ${item.msg ?? "Invalid value"}`;
-        })
-        .join(" ");
-    }
-  } catch {
-    return "We could not load this page.";
-  }
-  return "We could not load this page.";
 }

@@ -16,10 +16,12 @@ import {
   fetchTenantDashboard,
   fetchTenantList,
   getStoredAccessToken,
-  downloadChannelQr,
+  importTenantBrandingLogoFromUrl,
   ACTIVE_TENANT_STORAGE_KEY,
+  patchTenantProfile,
   publishSurvey,
   updateTenantBranding,
+  uploadTenantBrandingLogoFile,
   updateLocation,
   updateChannel,
   updateTenantUser,
@@ -47,13 +49,15 @@ import type {
 } from "../../types/admin";
 import { FeedbackFlow } from "../../components/feedback/FeedbackFlow";
 import { mapSurveyQuestionToPublic } from "../../components/feedback/mapSurveyQuestionToPublic";
+import { ChannelQrPosterModal } from "../../components/ChannelQrPosterModal";
 import { PortalOverflowMenu } from "../../components/PortalOverflowMenu";
 import {
   TEMPLATE_GALLERY_FIXTURE_QUESTIONS,
   buildPreviewContextStub,
 } from "../../components/feedback/templateGalleryFixtures";
 import { DEFAULT_SURVEY_PRESENTATION, normalizeSurveyPresentation, type SurveyPresentation } from "../../types/surveyPresentation";
-import type { PublicBranding } from "../../types/publicFeedback";
+import type { PublicBranding, PublicOrganization } from "../../types/publicFeedback";
+import { mapTenantProfileToPublicOrganization } from "../../types/publicFeedback";
 import { ResponsesExplorer } from "./ResponsesExplorer";
 
 type PageState = "loading" | "ready" | "error";
@@ -589,6 +593,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
               surveyVersions={dashboardData.surveyVersions}
               tenantBranding={dashboardData.branding}
               tenantId={dashboardData.tenant.id}
+              organization={mapTenantProfileToPublicOrganization(dashboardData.tenant)}
             />
           ) : null}
           {pageState === "ready" && dashboardData && !isCreatingSurvey && !activeSurveyBuilderId ? (
@@ -732,7 +737,7 @@ function AdminView({
     return <AnalyticsView dashboardData={dashboardData} />;
   }
   if (activeView === "organization") {
-    return <OrganizationView dashboardData={dashboardData} onUpdated={onUpdated} />;
+    return <OrganizationView dashboardData={dashboardData} me={me} onUpdated={onUpdated} />;
   }
   if (activeView === "templates") {
     return <TemplatesView dashboardData={dashboardData} />;
@@ -1620,6 +1625,7 @@ function SurveyBuilderModal({
   surveyVersions,
   tenantBranding,
   tenantId,
+  organization,
 }: {
   onClose: () => void;
   onUpdated: () => Promise<void>;
@@ -1628,6 +1634,7 @@ function SurveyBuilderModal({
   surveyVersions: SurveyVersion[];
   tenantBranding: TenantBranding;
   tenantId: string;
+  organization: PublicOrganization;
 }) {
   const [surveyDetail, setSurveyDetail] = useState<SurveyDetail | null>(null);
   const [builderMode, setBuilderMode] = useState<"editor" | "preview">("editor");
@@ -2102,6 +2109,7 @@ function SurveyBuilderModal({
                   surveyDescription={surveyDetail?.description ?? null}
                   templateSlug={previewSlug}
                   title={surveyDetail?.title ?? "Survey"}
+                  organization={organization}
                 />
               </>
             ) : (
@@ -2250,6 +2258,7 @@ function SurveyPreview({
   templateSlug,
   title,
   surveyDescription,
+  organization,
 }: {
   branding: TenantBranding;
   presentation: SurveyPresentation;
@@ -2257,6 +2266,7 @@ function SurveyPreview({
   templateSlug: string;
   title: string;
   surveyDescription?: string | null;
+  organization: PublicOrganization;
 }) {
   const stub = buildPreviewContextStub(
     {
@@ -2273,6 +2283,7 @@ function SurveyPreview({
         description: surveyDescription ?? null,
         default_locale: "en",
       },
+      organization,
     },
   );
   const publicQuestions =
@@ -2299,6 +2310,7 @@ function SurveyPreview({
         branding={stub.branding}
         channelCode={null}
         locationName={stub.location.name}
+        organization={stub.organization}
         onSubmitAnswers={null}
         presentation={presentation}
         previewBadge="Preview only"
@@ -3314,19 +3326,15 @@ function ChannelTable({
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
   const [copyingChannel, setCopyingChannel] = useState<Channel | null>(null);
   const [archivingChannel, setArchivingChannel] = useState<Channel | null>(null);
+  const [qrPosterChannel, setQrPosterChannel] = useState<Channel | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [copiedPublicLinkChannelId, setCopiedPublicLinkChannelId] = useState<string | null>(null);
   const canArchiveChannel = hasClientPermission(me, "channel:archive");
   const rowMenuButtonRefs = useRef(new Map<string, HTMLButtonElement | null>());
 
   async function copyPublicFeedbackUrl(channel: Channel) {
     try {
       await navigator.clipboard.writeText(publicFeedbackAbsoluteUrl(channel.channel_code));
-      setCopiedPublicLinkChannelId(channel.id);
       setActionError(null);
-      window.setTimeout(() => {
-        setCopiedPublicLinkChannelId((current) => (current === channel.id ? null : current));
-      }, 2000);
     } catch {
       setActionError("Could not copy link. Allow clipboard access or copy the path manually.");
     }
@@ -3352,21 +3360,6 @@ function ChannelTable({
       await onUpdated();
     } catch (nextError) {
       setActionError(nextError instanceof Error ? nextError.message : "Could not archive channel.");
-    }
-  }
-
-  async function downloadQr(channel: Channel, format: "png" | "svg") {
-    const token = getStoredAccessToken();
-    if (!token || !tenantId) {
-      setActionError("Please sign in again.");
-      return;
-    }
-
-    setActionError(null);
-    try {
-      await downloadChannelQr(token, tenantId, channel, format);
-    } catch (nextError) {
-      setActionError(nextError instanceof Error ? nextError.message : "Could not download QR.");
     }
   }
 
@@ -3424,74 +3417,104 @@ function ChannelTable({
                 {formatLastUpdated(channel.created_at, channel.updated_at)}
               </td>
               <td>
-                <div className={`row-actions ${openMenuChannelId === channel.id ? "row-actions--open" : ""}`}>
+                <div
+                  className={`channel-row-actions ${
+                    openMenuChannelId === channel.id ? "channel-row-actions--open" : ""
+                  }`}
+                >
                   <button
-                    ref={(element) => {
-                      if (element) rowMenuButtonRefs.current.set(channel.id, element);
-                      else rowMenuButtonRefs.current.delete(channel.id);
-                    }}
                     className="btn btn--icon"
                     type="button"
-                    aria-label="Channel actions"
-                    onClick={() =>
-                      setOpenMenuChannelId((currentId) =>
-                        currentId === channel.id ? null : channel.id,
-                      )
-                    }
+                    aria-label={`Edit ${channel.name}`}
+                    disabled={channel.status === "disabled"}
+                    title="Edit channel"
+                    onClick={() => setEditingChannel(channel)}
                   >
-                    <span className="material-symbols-outlined">more_vert</span>
+                    <span className="material-symbols-outlined">edit</span>
                   </button>
-                  {openMenuChannelId === channel.id ? (
-                    <PortalOverflowMenu
-                      anchorEl={rowMenuButtonRefs.current.get(channel.id) ?? null}
-                      open
-                      placement={index >= rows.length - 2 ? "above" : "auto"}
-                      onClose={() => setOpenMenuChannelId(null)}
+                  <a
+                    className="btn btn--icon"
+                    href={publicFeedbackAbsoluteUrl(channel.channel_code)}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                    aria-label="Open public feedback link in new tab"
+                    title="Open public link"
+                  >
+                    <span className="material-symbols-outlined">open_in_new</span>
+                  </a>
+                  <button
+                    className="btn btn--icon"
+                    type="button"
+                    aria-label="Show QR code"
+                    title="QR code"
+                    disabled={channel.status === "disabled"}
+                    onClick={() => setQrPosterChannel(channel)}
+                  >
+                    <span className="material-symbols-outlined">qr_code_2</span>
+                  </button>
+                  <div
+                    className={`channel-row-kebab ${openMenuChannelId === channel.id ? "channel-row-kebab--open" : ""}`}
+                  >
+                    <button
+                      ref={(element) => {
+                        if (element) rowMenuButtonRefs.current.set(channel.id, element);
+                        else rowMenuButtonRefs.current.delete(channel.id);
+                      }}
+                      className="btn btn--icon"
+                      type="button"
+                      aria-label={`More actions for ${channel.name}`}
+                      onClick={() =>
+                        setOpenMenuChannelId((currentId) =>
+                          currentId === channel.id ? null : channel.id,
+                        )
+                      }
                     >
-                      <a
-                        className="row-menu-item"
-                        href={publicFeedbackAbsoluteUrl(channel.channel_code)}
-                        rel="noopener noreferrer"
-                        target="_blank"
+                      <span className="material-symbols-outlined">more_vert</span>
+                    </button>
+                    {openMenuChannelId === channel.id ? (
+                      <PortalOverflowMenu
+                        anchorEl={rowMenuButtonRefs.current.get(channel.id) ?? null}
+                        open
+                        placement={index >= rows.length - 2 ? "above" : "auto"}
+                        onClose={() => setOpenMenuChannelId(null)}
                       >
-                        <span className="material-symbols-outlined">open_in_new</span>
-                        Open public link
-                      </a>
-                      <button
-                        className="row-menu-item"
-                        type="button"
-                        onClick={() => copyPublicFeedbackUrl(channel)}
-                      >
-                        <span className="material-symbols-outlined">content_copy</span>
-                        Copy public link
-                      </button>
-                      <button className="row-menu-item" type="button" onClick={() => setEditingChannel(channel)}>
-                        <span className="material-symbols-outlined">edit</span>
-                        Edit
-                      </button>
-                      <button className="row-menu-item" type="button" onClick={() => setCopyingChannel(channel)}>
-                        <span className="material-symbols-outlined">copy_all</span>
-                        Duplicate channel
-                      </button>
-                      <button className="row-menu-item" type="button" onClick={() => downloadQr(channel, "png")}>
-                        <span className="material-symbols-outlined">qr_code</span>
-                        QR PNG
-                      </button>
-                      <button className="row-menu-item" type="button" onClick={() => downloadQr(channel, "svg")}>
-                        <span className="material-symbols-outlined">download</span>
-                        QR SVG
-                      </button>
-                      <button
-                        className="row-menu-item row-menu-item--danger"
-                        disabled={channel.status === "disabled" || !canArchiveChannel}
-                        type="button"
-                        onClick={() => setArchivingChannel(channel)}
-                      >
-                        <span className="material-symbols-outlined">archive</span>
-                        Archive
-                      </button>
-                    </PortalOverflowMenu>
-                  ) : null}
+                        <button
+                          className="row-menu-item"
+                          type="button"
+                          onClick={() => {
+                            void copyPublicFeedbackUrl(channel).finally(() => setOpenMenuChannelId(null));
+                          }}
+                        >
+                          <span className="material-symbols-outlined">content_copy</span>
+                          Copy public link
+                        </button>
+                        <button
+                          className="row-menu-item"
+                          type="button"
+                          disabled={channel.status === "disabled"}
+                          onClick={() => {
+                            setCopyingChannel(channel);
+                            setOpenMenuChannelId(null);
+                          }}
+                        >
+                          <span className="material-symbols-outlined">copy_all</span>
+                          Duplicate channel
+                        </button>
+                        <button
+                          className="row-menu-item row-menu-item--danger"
+                          disabled={channel.status === "disabled" || !canArchiveChannel}
+                          type="button"
+                          onClick={() => {
+                            setArchivingChannel(channel);
+                            setOpenMenuChannelId(null);
+                          }}
+                        >
+                          <span className="material-symbols-outlined">archive</span>
+                          Archive
+                        </button>
+                      </PortalOverflowMenu>
+                    ) : null}
+                  </div>
                 </div>
               </td>
               </tr>
@@ -3528,6 +3551,13 @@ function ChannelTable({
           channel={archivingChannel}
           onArchive={archiveChannel}
           onClose={() => setArchivingChannel(null)}
+        />
+      ) : null}
+      {qrPosterChannel ? (
+        <ChannelQrPosterModal
+          channel={qrPosterChannel}
+          tenantId={tenantId ?? dashboardData.tenant.id}
+          onClose={() => setQrPosterChannel(null)}
         />
       ) : null}
     </div>
@@ -4310,6 +4340,7 @@ function TemplateLibrarySection({
               branding={stub.branding}
               channelCode={null}
               locationName={stub.location.name}
+              organization={stub.organization}
               onSubmitAnswers={null}
               presentation={templatePresentation}
               questions={TEMPLATE_GALLERY_FIXTURE_QUESTIONS}
@@ -4326,12 +4357,24 @@ function TemplateLibrarySection({
 
 function OrganizationView({
   dashboardData,
+  me,
   onUpdated,
 }: {
   dashboardData: DashboardData;
+  me: MeResponse | null;
   onUpdated: () => Promise<void>;
 }) {
-  const [logoUrl, setLogoUrl] = useState(dashboardData.branding.logo_url ?? "");
+  const canTenantUpdate = hasClientPermission(me, "tenant:update");
+  const canBrandingUpdate = hasClientPermission(me, "branding:update");
+
+  const [organizationName, setOrganizationName] = useState(dashboardData.tenant.name);
+  const [addressLine1, setAddressLine1] = useState(dashboardData.tenant.address_line1 ?? "");
+  const [addressLine2, setAddressLine2] = useState(dashboardData.tenant.address_line2 ?? "");
+  const [addressCity, setAddressCity] = useState(dashboardData.tenant.address_city ?? "");
+  const [addressState, setAddressState] = useState(dashboardData.tenant.address_state ?? "");
+  const [addressPostalCode, setAddressPostalCode] = useState(
+    dashboardData.tenant.address_postal_code ?? "",
+  );
   const [primaryColor, setPrimaryColor] = useState(
     dashboardData.branding.primary_color ?? "#1a73e8",
   );
@@ -4339,57 +4382,266 @@ function OrganizationView({
     dashboardData.branding.secondary_color ?? "#e8f0fe",
   );
   const [thankYouText, setThankYouText] = useState(dashboardData.branding.thank_you_text);
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [logoImportUrl, setLogoImportUrl] = useState("");
+  const [orgError, setOrgError] = useState<string | null>(null);
+  const [brandError, setBrandError] = useState<string | null>(null);
+  const [logoHint, setLogoHint] = useState<string | null>(null);
+  const [isSavingOrg, setIsSavingOrg] = useState(false);
+  const [isSavingBrand, setIsSavingBrand] = useState(false);
+  const [isLogoBusy, setIsLogoBusy] = useState(false);
+  const logoFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  async function saveBranding() {
+  useEffect(() => {
+    const tenant = dashboardData.tenant;
+    const branding = dashboardData.branding;
+    setOrganizationName(tenant.name);
+    setAddressLine1(tenant.address_line1 ?? "");
+    setAddressLine2(tenant.address_line2 ?? "");
+    setAddressCity(tenant.address_city ?? "");
+    setAddressState(tenant.address_state ?? "");
+    setAddressPostalCode(tenant.address_postal_code ?? "");
+    setPrimaryColor(branding.primary_color ?? "#1a73e8");
+    setSecondaryColor(branding.secondary_color ?? "#e8f0fe");
+    setThankYouText(branding.thank_you_text);
+    setLogoImportUrl("");
+    setOrgError(null);
+    setBrandError(null);
+    setLogoHint(null);
+    if (logoFileInputRef.current) {
+      logoFileInputRef.current.value = "";
+    }
+  }, [dashboardData]);
+
+  async function saveOrganization() {
     const token = getStoredAccessToken();
     if (!token) {
-      setError("Please sign in again.");
+      setOrgError("Please sign in again.");
+      return;
+    }
+    if (!organizationName.trim()) {
+      setOrgError("Organization name is required.");
+      return;
+    }
+    setIsSavingOrg(true);
+    setOrgError(null);
+    try {
+      await patchTenantProfile(token, dashboardData.tenant.id, {
+        name: organizationName.trim(),
+        address_line1: addressLine1.trim() || null,
+        address_line2: addressLine2.trim() || null,
+        address_city: addressCity.trim() || null,
+        address_state: addressState.trim() || null,
+        address_postal_code: addressPostalCode.trim() || null,
+      });
+      await onUpdated();
+    } catch (nextError) {
+      setOrgError(nextError instanceof Error ? nextError.message : "Could not save organization.");
+    } finally {
+      setIsSavingOrg(false);
+    }
+  }
+
+  async function saveBrandingColors() {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setBrandError("Please sign in again.");
       return;
     }
     if (!thankYouText.trim()) {
-      setError("Thank-you text is required.");
+      setBrandError("Thank-you text is required.");
       return;
     }
-
-    setIsSubmitting(true);
-    setError(null);
+    setIsSavingBrand(true);
+    setBrandError(null);
     try {
       await updateTenantBranding(token, dashboardData.tenant.id, {
-        logo_url: logoUrl.trim() || null,
         primary_color: primaryColor.trim() || null,
         secondary_color: secondaryColor.trim() || null,
         thank_you_text: thankYouText.trim(),
       });
       await onUpdated();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Could not update branding.");
+      setBrandError(nextError instanceof Error ? nextError.message : "Could not update branding.");
     } finally {
-      setIsSubmitting(false);
+      setIsSavingBrand(false);
     }
   }
+
+  async function uploadLogoFile() {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setBrandError("Please sign in again.");
+      return;
+    }
+    const input = logoFileInputRef.current;
+    const file = input?.files?.[0];
+    if (!file) {
+      setBrandError("Choose a PNG, JPEG, or WebP file first.");
+      return;
+    }
+    setIsLogoBusy(true);
+    setBrandError(null);
+    setLogoHint(null);
+    try {
+      await uploadTenantBrandingLogoFile(token, dashboardData.tenant.id, file);
+      if (input) {
+        input.value = "";
+      }
+      setLogoHint("Logo uploaded and stored locally.");
+      await onUpdated();
+    } catch (nextError) {
+      setBrandError(nextError instanceof Error ? nextError.message : "Could not upload logo.");
+    } finally {
+      setIsLogoBusy(false);
+    }
+  }
+
+  async function importLogoFromUrl() {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setBrandError("Please sign in again.");
+      return;
+    }
+    const url = logoImportUrl.trim();
+    if (!url) {
+      setBrandError("Paste an image URL to import.");
+      return;
+    }
+    setIsLogoBusy(true);
+    setBrandError(null);
+    setLogoHint(null);
+    try {
+      await importTenantBrandingLogoFromUrl(token, dashboardData.tenant.id, url);
+      setLogoImportUrl("");
+      setLogoHint("Logo imported and stored locally.");
+      await onUpdated();
+    } catch (nextError) {
+      setBrandError(nextError instanceof Error ? nextError.message : "Could not import logo.");
+    } finally {
+      setIsLogoBusy(false);
+    }
+  }
+
+  async function clearLogo() {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setBrandError("Please sign in again.");
+      return;
+    }
+    setIsLogoBusy(true);
+    setBrandError(null);
+    setLogoHint(null);
+    try {
+      await updateTenantBranding(token, dashboardData.tenant.id, { logo_url: null });
+      setLogoHint("Logo removed.");
+      await onUpdated();
+    } catch (nextError) {
+      setBrandError(nextError instanceof Error ? nextError.message : "Could not remove logo.");
+    } finally {
+      setIsLogoBusy(false);
+    }
+  }
+
+  const logoUrl = dashboardData.branding.logo_url;
 
   return (
     <div className="settings-wrap">
       <section className="settings-section">
         <div className="settings-label">
           <h3>Organization</h3>
-          <p>Core organization details for this tenant</p>
+          <p>Legal or display name and registered address</p>
         </div>
         <div className="settings-body">
           <div className="field">
-            <label className="field-label" htmlFor="settings-tenant">
-              Organization Name
+            <label className="field-label" htmlFor="org-name">
+              Organization name<span className="field-required-mark">*</span>
             </label>
             <input
               className="field-input"
-              id="settings-tenant"
-              readOnly
+              disabled={!canTenantUpdate}
+              id="org-name"
+              onChange={(event) => setOrganizationName(event.target.value)}
+              placeholder="Organization name"
               type="text"
-              value={dashboardData.tenant.name}
+              value={organizationName}
             />
           </div>
+          <fieldset className="org-address-fieldset">
+            <legend className="field-label">Address</legend>
+            <div className="field">
+              <label className="field-label visually-hidden" htmlFor="org-address-line1">
+                Address line 1
+              </label>
+              <input
+                className="field-input"
+                disabled={!canTenantUpdate}
+                id="org-address-line1"
+                onChange={(event) => setAddressLine1(event.target.value)}
+                placeholder="Address line 1"
+                type="text"
+                value={addressLine1}
+              />
+            </div>
+            <div className="field">
+              <label className="field-label visually-hidden" htmlFor="org-address-line2">
+                Address line 2
+              </label>
+              <input
+                className="field-input"
+                disabled={!canTenantUpdate}
+                id="org-address-line2"
+                onChange={(event) => setAddressLine2(event.target.value)}
+                placeholder="Address line 2 (optional)"
+                type="text"
+                value={addressLine2}
+              />
+            </div>
+            <div className="field-row field-row--tight">
+              <div className="field">
+                <label className="field-label" htmlFor="org-city">
+                  City
+                </label>
+                <input
+                  className="field-input"
+                  disabled={!canTenantUpdate}
+                  id="org-city"
+                  onChange={(event) => setAddressCity(event.target.value)}
+                  placeholder="City"
+                  type="text"
+                  value={addressCity}
+                />
+              </div>
+              <div className="field">
+                <label className="field-label" htmlFor="org-state">
+                  State / region
+                </label>
+                <input
+                  className="field-input"
+                  disabled={!canTenantUpdate}
+                  id="org-state"
+                  onChange={(event) => setAddressState(event.target.value)}
+                  placeholder="State"
+                  type="text"
+                  value={addressState}
+                />
+              </div>
+              <div className="field">
+                <label className="field-label" htmlFor="org-pin">
+                  PIN code
+                </label>
+                <input
+                  className="field-input"
+                  disabled={!canTenantUpdate}
+                  id="org-pin"
+                  inputMode="numeric"
+                  onChange={(event) => setAddressPostalCode(event.target.value)}
+                  placeholder="PIN / postal code"
+                  type="text"
+                  value={addressPostalCode}
+                />
+              </div>
+            </div>
+          </fieldset>
           <div className="field-row">
             <div className="field">
               <label className="field-label" htmlFor="settings-tenant-slug">
@@ -4416,34 +4668,101 @@ function OrganizationView({
               />
             </div>
           </div>
+          {orgError ? <div className="field-error-msg">{orgError}</div> : null}
+          <div className="settings-actions">
+            <button
+              className="btn btn--tenant"
+              disabled={!canTenantUpdate || isSavingOrg}
+              onClick={saveOrganization}
+              type="button"
+            >
+              {isSavingOrg ? "Saving…" : "Save organization"}
+            </button>
+          </div>
         </div>
       </section>
       <section className="settings-section">
         <div className="settings-label">
           <h3>Branding</h3>
-          <p>Controls the customer-facing feedback page for this tenant</p>
+          <p>Customer-facing feedback experience</p>
         </div>
         <div className="settings-body">
           <div className="field">
-            <label className="field-label" htmlFor="branding-logo">
-              Logo URL
-            </label>
-            <input
-              className="field-input"
-              id="branding-logo"
-              onChange={(event) => setLogoUrl(event.target.value)}
-              placeholder="https://example.com/logo.png"
-              value={logoUrl}
-            />
-            <span className="field-hint">Use a public image URL for now. Upload storage comes later.</span>
+            <span className="field-label">Logo</span>
+            <p className="field-hint">
+              Upload a file or paste a URL — the image is copied to local storage on the server (not
+              linked from elsewhere).
+            </p>
+            {logoUrl ? (
+              <div className="organization-logo-preview">
+                <img alt="" src={logoUrl} />
+              </div>
+            ) : (
+              <p className="text-secondary text-sm">No logo uploaded yet.</p>
+            )}
+            <div className="organization-logo-actions">
+              <input
+                ref={logoFileInputRef}
+                accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+                className="visually-hidden"
+                disabled={!canBrandingUpdate || isLogoBusy}
+                id="org-logo-file"
+                type="file"
+              />
+              <label className="btn btn--ghost" htmlFor="org-logo-file">
+                Choose file…
+              </label>
+              <button
+                className="btn btn--secondary"
+                disabled={!canBrandingUpdate || isLogoBusy}
+                onClick={uploadLogoFile}
+                type="button"
+              >
+                Upload logo
+              </button>
+              <button
+                className="btn btn--ghost"
+                disabled={!canBrandingUpdate || isLogoBusy || !logoUrl}
+                onClick={() => void clearLogo()}
+                type="button"
+              >
+                Remove logo
+              </button>
+            </div>
+            <div className="field organization-logo-url-field">
+              <label className="field-label" htmlFor="org-logo-url">
+                Import from URL
+              </label>
+              <div className="field-row organization-logo-import-row">
+                <input
+                  className="field-input"
+                  disabled={!canBrandingUpdate || isLogoBusy}
+                  id="org-logo-url"
+                  onChange={(event) => setLogoImportUrl(event.target.value)}
+                  placeholder="https://…"
+                  type="url"
+                  value={logoImportUrl}
+                />
+                <button
+                  className="btn btn--secondary organization-logo-import-btn"
+                  disabled={!canBrandingUpdate || isLogoBusy}
+                  onClick={() => void importLogoFromUrl()}
+                  type="button"
+                >
+                  Import
+                </button>
+              </div>
+            </div>
+            {logoHint ? <div className="field-success-msg">{logoHint}</div> : null}
           </div>
           <div className="field-row">
             <div className="field">
               <label className="field-label" htmlFor="branding-primary">
-                Primary Color
+                Primary color
               </label>
               <input
                 className="field-input"
+                disabled={!canBrandingUpdate}
                 id="branding-primary"
                 onChange={(event) => setPrimaryColor(event.target.value)}
                 type="color"
@@ -4452,10 +4771,11 @@ function OrganizationView({
             </div>
             <div className="field">
               <label className="field-label" htmlFor="branding-secondary">
-                Secondary Color
+                Secondary color
               </label>
               <input
                 className="field-input"
+                disabled={!canBrandingUpdate}
                 id="branding-secondary"
                 onChange={(event) => setSecondaryColor(event.target.value)}
                 type="color"
@@ -4465,24 +4785,25 @@ function OrganizationView({
           </div>
           <div className="field">
             <label className="field-label" htmlFor="branding-thank-you">
-              Thank-you Message
+              Thank-you message
             </label>
             <textarea
               className="field-input modal-textarea"
+              disabled={!canBrandingUpdate}
               id="branding-thank-you"
               onChange={(event) => setThankYouText(event.target.value)}
               value={thankYouText}
             />
           </div>
-          {error ? <div className="field-error-msg">{error}</div> : null}
+          {brandError ? <div className="field-error-msg">{brandError}</div> : null}
           <div className="settings-actions">
             <button
               className="btn btn--primary"
-              disabled={isSubmitting}
-              onClick={saveBranding}
+              disabled={!canBrandingUpdate || isSavingBrand}
+              onClick={saveBrandingColors}
               type="button"
             >
-              {isSubmitting ? "Saving" : "Save Branding"}
+              {isSavingBrand ? "Saving…" : "Save branding"}
             </button>
           </div>
         </div>

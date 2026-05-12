@@ -14,3 +14,4 @@ build/
 coverage.xml
 .coverage
 htmlcov/
+backend/data/

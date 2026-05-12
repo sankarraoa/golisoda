@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from redis.asyncio import Redis
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.passwords import verify_password
@@ -14,7 +14,7 @@ from app.auth.refresh_tokens import (
 )
 from app.auth.tokens import create_access_token
 from app.models.auth import User
-from app.models.enums import AuditAction, AuditActorType, AuditOutcome, UserStatus
+from app.models.enums import AuditAction, AuditActorType, AuditOutcome, PermissionCode, UserStatus
 from app.services.audit import write_audit_log
 
 
@@ -22,41 +22,38 @@ class AuthError(Exception):
     pass
 
 
-async def authenticate_user(
-    session: AsyncSession,
-    *,
-    email: str,
-    password: str,
-    request_id: str | None,
+async def _reject_login_unknown(
+    session: AsyncSession, *, normalized_email: str, request_id: str | None
+) -> None:
+    await write_audit_log(
+        session,
+        actor_type=AuditActorType.SYSTEM,
+        actor_id="auth",
+        action=AuditAction.LOGIN_FAILED,
+        outcome=AuditOutcome.DENIED,
+        request_id=request_id,
+        metadata={"email": normalized_email},
+    )
+    raise AuthError("Invalid email or password.")
+
+
+async def _reject_inactive(session: AsyncSession, user: User, request_id: str | None) -> None:
+    await write_audit_log(
+        session,
+        actor_type=AuditActorType.USER,
+        actor_id=str(user.id),
+        tenant_id=user.tenant_id,
+        action=AuditAction.LOGIN_FAILED,
+        outcome=AuditOutcome.DENIED,
+        request_id=request_id,
+        metadata={"reason": "inactive_user"},
+    )
+    raise AuthError("User is not active.")
+
+
+async def _complete_login(
+    session: AsyncSession, user: User, *, request_id: str | None
 ) -> User:
-    normalized_email = email.lower()
-    user = await session.scalar(select(User).where(User.email == normalized_email))
-
-    if user is None or not verify_password(password, user.password_hash):
-        await write_audit_log(
-            session,
-            actor_type=AuditActorType.SYSTEM,
-            actor_id="auth",
-            action=AuditAction.LOGIN_FAILED,
-            outcome=AuditOutcome.DENIED,
-            request_id=request_id,
-            metadata={"email": normalized_email},
-        )
-        raise AuthError("Invalid email or password.")
-
-    if user.status != UserStatus.ACTIVE:
-        await write_audit_log(
-            session,
-            actor_type=AuditActorType.USER,
-            actor_id=str(user.id),
-            tenant_id=user.tenant_id,
-            action=AuditAction.LOGIN_FAILED,
-            outcome=AuditOutcome.DENIED,
-            request_id=request_id,
-            metadata={"reason": "inactive_user"},
-        )
-        raise AuthError("User is not active.")
-
     user.last_login_at = datetime.now(UTC)
     await write_audit_log(
         session,
@@ -68,6 +65,132 @@ async def authenticate_user(
         request_id=request_id,
     )
     return user
+
+
+async def authenticate_tenant_admin_user(
+    session: AsyncSession,
+    *,
+    email: str,
+    password: str,
+    request_id: str | None,
+) -> User:
+    """Tenant Admin SPA: tenant-bound users, or platform super admins (global operators)."""
+    normalized_email = email.lower()
+
+    platform_user = await session.scalar(
+        select(User).where(User.email == normalized_email, User.tenant_id.is_(None))
+    )
+    if platform_user is not None and verify_password(password, platform_user.password_hash):
+        if platform_user.status != UserStatus.ACTIVE:
+            await _reject_inactive(session, platform_user, request_id)
+        principal = await load_principal(session, platform_user)
+        if PermissionCode.PLATFORM_MANAGE.value not in principal.permission_codes:
+            await _reject_login_unknown(
+                session,
+                normalized_email=normalized_email,
+                request_id=request_id,
+            )
+        return await _complete_login(session, platform_user, request_id=request_id)
+
+    user = await session.scalar(
+        select(User).where(User.email == normalized_email, User.tenant_id.is_not(None))
+    )
+
+    if user is None or not verify_password(password, user.password_hash):
+        await _reject_login_unknown(
+            session,
+            normalized_email=normalized_email,
+            request_id=request_id,
+        )
+
+    if user.status != UserStatus.ACTIVE:
+        await _reject_inactive(session, user, request_id)
+
+    return await _complete_login(session, user, request_id=request_id)
+
+
+async def authenticate_platform_super_admin_user(
+    session: AsyncSession,
+    *,
+    email: str,
+    password: str,
+    request_id: str | None,
+) -> User:
+    """Platform Admin API: users with no tenant_id and platform:manage permission."""
+    normalized_email = email.lower()
+    user = await session.scalar(
+        select(User).where(User.email == normalized_email, User.tenant_id.is_(None))
+    )
+
+    if user is None or not verify_password(password, user.password_hash):
+        await _reject_login_unknown(
+            session,
+            normalized_email=normalized_email,
+            request_id=request_id,
+        )
+
+    if user.status != UserStatus.ACTIVE:
+        await _reject_inactive(session, user, request_id)
+
+    principal = await load_principal(session, user)
+    if PermissionCode.PLATFORM_MANAGE.value not in principal.permission_codes:
+        await write_audit_log(
+            session,
+            actor_type=AuditActorType.USER,
+            actor_id=str(user.id),
+            tenant_id=None,
+            action=AuditAction.LOGIN_FAILED,
+            outcome=AuditOutcome.DENIED,
+            request_id=request_id,
+            metadata={"reason": "not_platform_super_admin"},
+        )
+        raise AuthError("Invalid email or password.")
+
+    return await _complete_login(session, user, request_id=request_id)
+
+
+async def authenticate_monolith_user(
+    session: AsyncSession,
+    *,
+    email: str,
+    password: str,
+    request_id: str | None,
+) -> User:
+    """Monolith login: prefers a platform console user when the same email matches both worlds."""
+    normalized_email = email.lower()
+    stmt = (
+        select(User)
+        .where(User.email == normalized_email)
+        .order_by(case((User.tenant_id.is_(None), 0), else_=1))
+    )
+    user = await session.scalar(stmt)
+
+    if user is None or not verify_password(password, user.password_hash):
+        await _reject_login_unknown(
+            session,
+            normalized_email=normalized_email,
+            request_id=request_id,
+        )
+
+    if user.status != UserStatus.ACTIVE:
+        await _reject_inactive(session, user, request_id)
+
+    if user.tenant_id is None:
+        principal = await load_principal(session, user)
+        if PermissionCode.PLATFORM_MANAGE.value not in principal.permission_codes:
+            await write_audit_log(
+                session,
+                actor_type=AuditActorType.USER,
+                actor_id=str(user.id),
+                tenant_id=None,
+                action=AuditAction.LOGIN_FAILED,
+                outcome=AuditOutcome.DENIED,
+                request_id=request_id,
+                metadata={"reason": "not_platform_super_admin"},
+            )
+            raise AuthError("Invalid email or password.")
+
+    return await _complete_login(session, user, request_id=request_id)
 
 
 async def issue_token_pair(

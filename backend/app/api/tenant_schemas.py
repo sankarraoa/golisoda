@@ -18,14 +18,32 @@ class TenantResponse(BaseModel):
     slug: str
     default_locale: str
     status: TenantStatus
+    address_line1: str | None = None
+    address_line2: str | None = None
+    address_city: str | None = None
+    address_state: str | None = None
+    address_postal_code: str | None = None
     created_at: datetime
     updated_at: datetime
 
 
+class TenantUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    address_line1: str | None = Field(default=None, max_length=255)
+    address_line2: str | None = Field(default=None, max_length=255)
+    address_city: str | None = Field(default=None, max_length=120)
+    address_state: str | None = Field(default=None, max_length=120)
+    address_postal_code: str | None = Field(default=None, max_length=32)
+
+
 class BrandingUpdateRequest(BaseModel):
-    logo_url: str | None = None
+    logo_url: str | None = Field(
+        default=None,
+        description="Clear with null. Non-null values are not accepted; use logo upload or import.",
+    )
     primary_color: str | None = Field(default=None, max_length=16)
     secondary_color: str | None = Field(default=None, max_length=16)
+    theme_overrides: dict[str, str] | None = None
     thank_you_text: str | None = Field(default=None, min_length=1)
 
 
@@ -38,6 +56,10 @@ class BrandingResponse(BaseModel):
     thank_you_text: str
     created_at: datetime
     updated_at: datetime
+
+
+class LogoImportUrlRequest(BaseModel):
+    url: str = Field(min_length=8, max_length=2048)
 
 
 class PermissionResponse(BaseModel):

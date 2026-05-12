@@ -61,4 +61,6 @@ cd backend
 pytest
 ```
 
-`/ready` requires PostgreSQL and Redis to be running.
+`GET /ready` or `GET /health/ready` requires PostgreSQL and Redis to be running.
+
+For split deploy maps and worker commands see `docs/architecture/microservices-router-map.md`.

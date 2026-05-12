@@ -73,27 +73,23 @@ export function FeedbackShell({
     </>
   );
 
-  const isHeritageLuxuryDual = templateSlug === "heritage_luxury";
+  const isJewelryCardLayout = templateSlug === "heritage_luxury";
 
   return (
     <div className={shellClass} data-template={templateSlug}>
-      {isHeritageLuxuryDual ? (
-        <div className="heritage-luxury-wrap">
-          <div className="heritage-luxury-frame">
-            <div className="heritage-luxury-grid">
-              <form className="public-card heritage-luxury-card" onSubmit={onSubmit}>
+      {isJewelryCardLayout ? (
+        <div className="jewelry-card-wrap">
+          <div className="jewelry-card-page">
+            <div className="jewelry-card-grid">
+              <form className="public-card jewelry-card-form" onSubmit={onSubmit}>
                 {formBody}
               </form>
-              <aside className="heritage-luxury-hero" aria-hidden>
-                <img
-                  alt=""
-                  decoding="async"
-                  src="/feedback-theme/heritage-luxury-hero.png"
-                />
+              <aside className="jewelry-card-hero" aria-hidden>
+                <img alt="" decoding="async" src="/feedback-theme/jewelry-feedback-hero.png" />
               </aside>
             </div>
           </div>
-          <p className="public-powered heritage-luxury-powered">Powered by goliSoda</p>
+          <p className="public-powered jewelry-card-powered">Powered by goliSoda</p>
         </div>
       ) : (
         <>
@@ -114,13 +110,13 @@ export function FeedbackHeader({
 }: {
   logo: ReactNode;
   title: string;
-  subtitle: string;
+  subtitle: ReactNode;
 }) {
   return (
     <header className="public-header">
       {logo}
       <h1 className="public-title">{title}</h1>
-      <p className="public-subtitle">{subtitle}</p>
+      <div className="public-subtitle">{subtitle}</div>
     </header>
   );
 }

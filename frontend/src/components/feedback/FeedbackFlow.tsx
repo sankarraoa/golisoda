@@ -1,6 +1,13 @@
 import { FormEvent, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
-import type { AnswerValue, PublicBranding, PublicQuestion, SubmitAnswer } from "../../types/publicFeedback";
+import type {
+  AnswerValue,
+  PublicBranding,
+  PublicOrganization,
+  PublicQuestion,
+  SubmitAnswer,
+} from "../../types/publicFeedback";
+import { formatPublicOrganizationAddressLines } from "../../types/publicFeedback";
 import type { SurveyPresentation } from "../../types/surveyPresentation";
 import { FeedbackHeader, FeedbackProgress, FeedbackShell } from "./FeedbackShell";
 import { QuestionRenderer, validateQuestionAnswer } from "./QuestionRenderer";
@@ -27,11 +34,13 @@ export function FeedbackFlow({
   branding,
   surveyTitle,
   locationName,
+  organization,
   channelCode,
   onSubmitAnswers,
   previewBadge,
   disableStepBack = false,
   surveyDescription = null,
+  theme = {},
 }: {
   templateSlug: string;
   presentation: SurveyPresentation;
@@ -39,14 +48,17 @@ export function FeedbackFlow({
   branding: PublicBranding;
   surveyTitle: string;
   locationName: string;
+  /** Tenant org profile from public context; `heritage_luxury` uses it in the header. */
+  organization: PublicOrganization;
   channelCode: string | null;
   defaultLocale?: string;
   onSubmitAnswers: ((answers: SubmitAnswer[]) => Promise<void>) | null;
   previewBadge?: ReactNode;
   /** When true, stepper layouts hide the footer Back control (e.g. one-way QR flows). */
   disableStepBack?: boolean;
-  /** Survey description: `heritage_immersive` ornamental tagline; `heritage_luxury` italic closing under Submit. */
+  /** Survey description: `heritage_immersive` ornamental tagline; `heritage_luxury` (jewelry card) italic closing under Submit. */
   surveyDescription?: string | null;
+  theme?: Record<string, string>;
 }) {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
@@ -172,12 +184,7 @@ export function FeedbackFlow({
       </div>
     ) : null;
 
-  const kioskSubmitPhrase =
-    templateSlug === "kiosk_touch"
-      ? "Submit Feedback"
-      : templateSlug === "heritage_luxury"
-        ? "Submit feedback"
-        : "Submit";
+  const kioskSubmitPhrase = templateSlug === "kiosk_touch" ? "Submit Feedback" : "Submit";
 
   const heritageFooterTagline =
     surveyDescription?.trim() || "Your feedback helps us serve you better.";
@@ -238,21 +245,21 @@ export function FeedbackFlow({
         <div className="heritage-floor" aria-hidden />
       </>
     ) : templateSlug === "heritage_luxury" ? (
-      <footer className="public-footer public-footer--heritage-luxury">
+      <footer className="public-footer public-footer--jewelry-card">
         {previewBadge ? (
-          <div className="heritage-luxury-preview-note">
+          <div className="jewelry-card-preview-note">
             <span className="text-secondary text-sm">{previewBadge}</span>
           </div>
         ) : null}
-        <div className="heritage-luxury-footer-submit-row">
+        <div className="jewelry-card-footer-submit-row">
           {backButton}
           <button
-            className="btn btn--tenant heritage-luxury-submit"
+            className="btn btn--tenant jewelry-card-submit"
             disabled={isSubmitting || sortedQuestions.length === 0}
             type="submit"
           >
             {footerSubmitLabel}
-            {footerSubmitLabel === "Submitting" ? null : (
+            {templateSlug === "heritage_luxury" || footerSubmitLabel === "Submitting" ? null : (
               <>
                 {" "}
                 »
@@ -260,7 +267,7 @@ export function FeedbackFlow({
             )}
           </button>
         </div>
-        <p className="heritage-luxury-footer-closing">{heritageLuxuryClosing}</p>
+        <p className="jewelry-card-footer-closing">{heritageLuxuryClosing}</p>
       </footer>
     ) : (
       <footer className="public-footer">
@@ -291,6 +298,7 @@ export function FeedbackFlow({
                 question={question}
                 value={answers[question.question_key]}
                 onChange={(value) => updateAnswer(question.question_key, value)}
+                theme={theme}
               />
             </div>
           </section>
@@ -318,6 +326,7 @@ export function FeedbackFlow({
                 question={currentQuestion}
                 value={answers[currentQuestion.question_key]}
                 onChange={(value) => updateAnswer(currentQuestion.question_key, value)}
+                theme={theme}
               />
               {fieldError ? <div className="public-error">{fieldError}</div> : null}
             </div>
@@ -351,6 +360,30 @@ export function FeedbackFlow({
           title={surveyTitle}
         />
       </>
+    ) : templateSlug === "heritage_luxury" ? (
+      (() => {
+        const orgLines = formatPublicOrganizationAddressLines(organization);
+        const displayName = organization.name?.trim() || surveyTitle;
+        const subtitleNode =
+          orgLines.length > 0 ? (
+            <div className="jewelry-org-address">
+              {orgLines.map((line, index) => (
+                <div className="jewelry-org-address-line" key={`${index}-${line}`}>
+                  {line}
+                </div>
+              ))}
+            </div>
+          ) : (
+            locationName
+          );
+        return (
+          <FeedbackHeader
+            logo={<TenantLogoFeedback branding={branding} surveyTitle={surveyTitle} />}
+            subtitle={subtitleNode}
+            title={displayName}
+          />
+        );
+      })()
     ) : (
       <FeedbackHeader
         logo={<TenantLogoFeedback branding={branding} surveyTitle={surveyTitle} />}

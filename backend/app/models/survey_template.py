@@ -16,5 +16,6 @@ class SurveyTemplate(UuidPrimaryKeyMixin, TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     deployment_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     presentation: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    theme: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))

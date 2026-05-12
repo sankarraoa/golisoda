@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { FeedbackFlow } from "../../components/feedback/FeedbackFlow";
+import { applyTheme } from "../../feedback/theme/applyTheme";
 import { fetchPublicFeedbackContext, submitPublicFeedback } from "../../lib/publicFeedbackApi";
 import type { PublicFeedbackContext, SubmitAnswer } from "../../types/publicFeedback";
 import { resolveSurveyPresentation } from "../../types/publicFeedback";
@@ -68,6 +69,14 @@ export function PublicFeedbackPage() {
       return;
     }
 
+    applyTheme(context.effective_theme ?? {});
+  }, [context]);
+
+  useEffect(() => {
+    if (!context) {
+      return;
+    }
+
     if (context.branding.primary_color) {
       document.documentElement.style.setProperty("--color-tenant-primary", context.branding.primary_color);
     } else {
@@ -123,7 +132,7 @@ export function PublicFeedbackPage() {
     return <LoadingState />;
   }
 
-  if (viewState === "error" || !context) {
+  if (!context) {
     return (
       <PublicShell>
         <StatePanel
@@ -137,21 +146,45 @@ export function PublicFeedbackPage() {
     );
   }
 
-  if (viewState === "submitted") {
+  const presentation = resolveSurveyPresentation(context);
+  const templateSlug = context.template?.slug ?? "default_stepper";
+  const shellProps = {
+    templateSlug,
+    largeTargets: presentation.touch.large_targets,
+  };
+
+  if (viewState === "error") {
     return (
-      <PublicShell>
+      <PublicShell {...shellProps}>
         <StatePanel
-          tone="success"
-          title="Thank you"
-          body={thankYouText || context.branding.thank_you_text}
-          helperText={isKioskLoop ? `Next person in ${resetSeconds}s.` : undefined}
+          tone="error"
+          title="Something went wrong"
+          body={submitError || "Your response was not saved. Please try again."}
+          actionLabel="Retry"
+          onAction={() => window.location.reload()}
         />
       </PublicShell>
     );
   }
 
-  const presentation = resolveSurveyPresentation(context);
-  const templateSlug = context.template?.slug ?? "default_stepper";
+  if (viewState === "submitted") {
+    const thankBody = thankYouText || context.branding.thank_you_text;
+    const kioskHelper = isKioskLoop ? `Next person in ${resetSeconds}s.` : undefined;
+
+    if (templateSlug === "heritage_luxury") {
+      return (
+        <PublicShell {...shellProps}>
+          <JewelryThankYouPanel body={thankBody} helperText={kioskHelper} />
+        </PublicShell>
+      );
+    }
+
+    return (
+      <PublicShell {...shellProps}>
+        <StatePanel tone="success" title="Thank you" body={thankBody} helperText={kioskHelper} />
+      </PublicShell>
+    );
+  }
 
   return (
     <FeedbackFlow
@@ -181,13 +214,63 @@ export function PublicFeedbackPage() {
       surveyDescription={context.survey.description}
       surveyTitle={context.survey.title}
       templateSlug={templateSlug}
+      theme={context.effective_theme ?? {}}
+      organization={context.organization}
       disableStepBack={!isKioskLoop}
     />
   );
 }
 
-function PublicShell({ children }: { children: ReactNode }) {
-  return <div className="public-shell">{children}</div>;
+function PublicShell({
+  children,
+  templateSlug,
+  largeTargets,
+}: {
+  children: ReactNode;
+  templateSlug?: string;
+  largeTargets?: boolean;
+}) {
+  const className = ["public-shell", largeTargets ? "public-shell--large-targets" : ""].filter(Boolean).join(" ");
+  return (
+    <div className={className} {...(templateSlug ? { "data-template": templateSlug } : {})}>
+      {children}
+    </div>
+  );
+}
+
+function JewelryThankYouEmblem() {
+  return (
+    <svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+      <g fill="none" stroke="currentColor" strokeWidth="1.5">
+        <circle cx="40" cy="40" r="32" opacity="0.3" />
+        <circle cx="40" cy="40" r="24" opacity="0.5" />
+        <path
+          d="M 40 22 Q 30 32 30 40 Q 30 48 40 56 Q 50 48 50 40 Q 50 32 40 22 Z"
+          fill="currentColor"
+          opacity="0.2"
+        />
+        <circle cx="40" cy="40" r="4" fill="currentColor" />
+      </g>
+    </svg>
+  );
+}
+
+function JewelryThankYouPanel({ body, helperText }: { body: string; helperText?: string }) {
+  return (
+    <div className="jewelry-card-wrap">
+      <div className="jewelry-card-page jewelry-card-page--thankyou">
+        <div className="jewelry-thankyou">
+          <div className="jewelry-thankyou-emblem">
+            <JewelryThankYouEmblem />
+          </div>
+          <h1 className="jewelry-thankyou-title">Thank You</h1>
+          <p className="jewelry-thankyou-message">{body}</p>
+          {helperText ? <p className="jewelry-thankyou-helper">{helperText}</p> : null}
+        </div>
+      </div>
+      <p className="public-powered jewelry-card-powered">Powered by goliSoda</p>
+    </div>
+  );
 }
 
 function StatePanel({

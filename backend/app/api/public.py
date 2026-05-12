@@ -8,6 +8,7 @@ from app.api.channel_schemas import (
     PublicBrandingResponse,
     PublicFeedbackContextResponse,
     PublicLocationResponse,
+    PublicOrganizationResponse,
     PublicSubmitRequest,
     PublicSubmitResponse,
     PublicSurveyTemplatePayload,
@@ -21,6 +22,7 @@ from app.models.survey_template import SurveyTemplate
 from app.models.tenant import Location, Tenant, TenantBranding
 from app.schemas.survey_presentation import parse_presentation
 from app.services.feedback_submission import enqueue_public_submission, validate_public_answers
+from app.services.surveys import resolve_effective_theme
 from app.workers.feedback_submission import process_feedback_submission_batch
 
 router = APIRouter(tags=["public"])
@@ -60,6 +62,7 @@ async def get_public_feedback_context(
             detail="Survey template missing.",
         )
     presentation = parse_presentation(survey_template.presentation)
+    effective_theme = resolve_effective_theme(survey_template, branding)
 
     snapshot = survey_version.schema_snapshot
     return PublicFeedbackContextResponse(
@@ -72,12 +75,21 @@ async def get_public_feedback_context(
             city=location.city,
             region=location.region,
         ),
+        organization=PublicOrganizationResponse(
+            name=tenant.name,
+            address_line1=tenant.address_line1,
+            address_line2=tenant.address_line2,
+            city=tenant.address_city,
+            region=tenant.address_state,
+            postal_code=tenant.address_postal_code,
+        ),
         branding=PublicBrandingResponse(
             logo_url=branding.logo_url,
             primary_color=branding.primary_color,
             secondary_color=branding.secondary_color,
             thank_you_text=branding.thank_you_text,
         ),
+        effective_theme=effective_theme,
         survey_version_id=survey_version.id,
         survey=snapshot["survey"],
         questions=snapshot["questions"],

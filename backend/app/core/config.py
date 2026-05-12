@@ -2,7 +2,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -10,6 +10,11 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 class Settings(BaseSettings):
     app_name: str = "Goli Soda Feedback API"
+    #: Shown on `/ready`; set env `SERVICE_NAME` per Railway service.
+    service_name: str = Field(
+        default="monolith",
+        validation_alias=AliasChoices("SERVICE_NAME", "service_name"),
+    )
     environment: str = "local"
     log_level: str = "INFO"
 
@@ -31,6 +36,12 @@ class Settings(BaseSettings):
     admin_cors_origins: str = (
         "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000"
     )
+
+    #: Public origin of this API (used for persisted branding logo URLs and upload paths).
+    api_public_origin: str = "http://127.0.0.1:8000"
+
+    #: On-disk tenant logo storage (JPEG/PNG/WebP copied locally from upload or remote URL).
+    tenant_branding_storage_path: Path = BACKEND_DIR / "data" / "tenant_branding"
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",

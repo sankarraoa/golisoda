@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jewelry feedback card template</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Cormorant+SC:wght@500;600;700&family=Cardo:ital,wght@0,400;0,700;1,400&family=Noto+Sans+Tamil:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  /* =============================================================================
+     HARNESS BAR (preview tooling — NOT part of the template)
+     ============================================================================= */
+  body { margin: 0; }
+  .harness-bar {
+    position: sticky; top: 0; z-index: 1000;
+    background: linear-gradient(180deg, #1a1210 0%, #2a1f1c 100%);
+    color: #f4dcd0;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 14px;
+    border-bottom: 1px solid #4a3530;
+    flex-wrap: wrap;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  .harness-bar strong { color: #d4b878; letter-spacing: 0.05em; }
+  .harness-bar select, .harness-bar button {
+    background: #3a2520;
+    color: #f4dcd0;
+    border: 1px solid #6b4d44;
+    padding: 6px 10px;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .harness-bar .submission-output {
+    margin-left: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #a8a098;
+    max-width: 500px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .harness-bar .submission-output.has-data { color: #d4b878; }
+
+  /* =============================================================================
+     TEMPLATE STYLES — start here
+     ============================================================================= */
+  :root {
+    --color-bg: #f7d9d3;
+    --color-bg-soft: #fbeae5;
+    --color-cream: #fef6f1;
+    --color-rose: #d4a59a;
+    --color-deep-rose: #b85a52;
+    --color-maroon: #7a2a26;
+    --color-maroon-deep: #5a1f1c;
+    --color-gold: #b8924a;
+    --color-gold-light: #d4b878;
+    --color-gold-dark: #8a6a2e;
+    --color-ink: #3a2520;
+    --color-ink-soft: #6b4d44;
+
+    --shadow-soft: 0 4px 20px rgba(122, 42, 38, 0.08);
+    --shadow-card: 0 1px 4px rgba(122, 42, 38, 0.10), 0 8px 24px rgba(122, 42, 38, 0.06);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  .template-stage {
+    font-family: 'Cormorant Garamond', 'Cardo', Georgia, serif;
+    background: var(--color-bg);
+    background-image:
+      radial-gradient(ellipse at top right, rgba(255, 255, 255, 0.4) 0%, transparent 50%),
+      radial-gradient(ellipse at bottom left, rgba(212, 165, 154, 0.3) 0%, transparent 50%),
+      linear-gradient(180deg, #f9dcd6 0%, #f4cdc4 100%);
+    color: var(--color-ink);
+    line-height: 1.5;
+    min-height: calc(100vh - 60px);
+    padding: 16px;
+  }
+
+  .page-frame {
+    max-width: 1100px;
+    margin: 0 auto;
+    background: linear-gradient(180deg, #fbeae5 0%, #f4cdc4 100%);
+    position: relative;
+    box-shadow: var(--shadow-soft);
+    padding: 56px;
+    border: 1px solid rgba(184, 146, 74, 0.3);
+    overflow: hidden;
+  }
+
+  /* Decorative corner ornaments */
+  .corner {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    pointer-events: none;
+    color: var(--color-gold);
+    opacity: 0.85;
+  }
+  .corner-tl { top: 12px; left: 12px; }
+  .corner-tr { top: 12px; right: 12px; transform: scaleX(-1); }
+  .corner-bl { bottom: 12px; left: 12px; transform: scaleY(-1); }
+  .corner-br { bottom: 12px; right: 12px; transform: scale(-1, -1); }
+
+  /* Split layout: questions on the left; hero photo fills the right column (full height). */
+  .layout-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(260px, 0.88fr);
+    gap: 36px;
+    align-items: stretch;
+    position: relative;
+    z-index: 2;
+  }
+
+  .form-column {
+    min-width: 0;
+    position: relative;
+    z-index: 2;
+  }
+
+  .hero-column {
+    position: relative;
+    min-width: 0;
+    border-radius: 0;
+    overflow: visible;
+    background: transparent;
+    box-shadow: none;
+    isolation: isolate;
+  }
+
+  .hero-column::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(180deg, #fbeae5 0%, #f4cdc4 100%);
+  }
+
+  .hero-image {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    width: auto;
+    height: auto;
+    max-width: min(100%, 320px);
+    max-height: min(100%, 90%);
+    object-fit: contain;
+    object-position: center center;
+    display: block;
+    background: transparent;
+    mix-blend-mode: multiply;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 16px;
+  }
+
+  .header-emblem {
+    display: inline-block;
+    margin-bottom: 12px;
+    color: var(--color-deep-rose);
+  }
+
+  .store-name {
+    font-family: 'Cormorant SC', 'Cormorant Garamond', serif;
+    font-weight: 700;
+    font-size: 2.2rem;
+    letter-spacing: 0.18em;
+    color: var(--color-maroon);
+    margin: 0 0 4px;
+    line-height: 1.1;
+  }
+
+  .store-tagline {
+    font-family: 'Cormorant SC', serif;
+    font-style: normal;
+    font-weight: 500;
+    font-size: 0.85rem;
+    color: var(--color-gold-dark);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .store-since {
+    font-family: 'Cormorant SC', serif;
+    font-size: 0.7rem;
+    color: var(--color-gold-dark);
+    letter-spacing: 0.3em;
+    margin-top: 6px;
+    text-transform: uppercase;
+  }
+
+  .store-address-line {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: var(--color-ink-soft);
+    line-height: 1.35;
+    margin-top: 3px;
+  }
+
+  .header-divider {
+    margin: 16px auto 0;
+    color: var(--color-gold);
+    text-align: center;
+  }
+
+  .welcome-headline {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 600;
+    font-size: 2rem;
+    color: var(--color-maroon);
+    margin: 28px 0 4px;
+    line-height: 1.2;
+    letter-spacing: -0.005em;
+  }
+
+  .welcome-subtitle {
+    font-family: 'Noto Sans Tamil', 'Cormorant Garamond', serif;
+    font-weight: 500;
+    font-size: 1.4rem;
+    color: var(--color-maroon);
+    line-height: 1.4;
+    margin-bottom: 16px;
+  }
+
+  .location-line {
+    font-family: 'Cormorant SC', serif;
+    font-size: 0.75rem;
+    color: var(--color-gold-dark);
+    margin-top: 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  /* Section divider */
+  .section-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 24px 0 28px;
+    color: var(--color-gold);
+  }
+
+  /* Question card */
+  .question-card {
+    margin-bottom: 28px;
+  }
+
+  .question-prompt {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 600;
+    font-size: 1.25rem;
+    color: var(--color-ink);
+    margin-bottom: 4px;
+    line-height: 1.3;
+  }
+
+  .question-prompt-secondary {
+    font-family: 'Noto Sans Tamil', 'Cormorant Garamond', serif;
+    font-size: 0.95rem;
+    color: var(--color-ink-soft);
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+
+  .question-required-mark {
+    color: var(--color-deep-rose);
+    margin-left: 4px;
+  }
+
+  .question-help {
+    font-style: italic;
+    font-size: 0.9rem;
+    color: var(--color-ink-soft);
+    margin-bottom: 12px;
+  }
+
+  .question-error {
+    font-size: 0.85rem;
+    color: var(--color-deep-rose);
+    margin-top: 8px;
+    font-style: italic;
+    display: none;
+  }
+  .question-card.has-error .question-error { display: block; }
+  .question-card.has-error .question-prompt { color: var(--color-deep-rose); }
+
+  /* ============== NPS - Floral Medallions (0–1 rose, 5 neutral, 9–10 sage) ============== */
+  .nps-scale {
+    display: grid;
+    grid-template-columns: repeat(11, 1fr);
+    gap: clamp(8px, 1.8vw, 14px);
+    margin: 12px 0 8px;
+  }
+
+  .nps-medallion {
+    aspect-ratio: 1;
+    border: 1px solid rgba(184, 146, 74, 0.45);
+    color: var(--color-ink);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    position: relative;
+    border-radius: 50%;
+    padding: 0;
+  }
+
+  .nps-medallion::before {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    transition: border-color 0.2s ease;
+  }
+
+  .nps-medallion:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-gold);
+    box-shadow: 0 4px 12px rgba(184, 146, 74, 0.25);
+  }
+
+  .nps-medallion[data-score="0"] {
+    background: linear-gradient(145deg, #e8a8a2 0%, #d48984 100%);
+    border-color: rgba(122, 42, 38, 0.35);
+    color: rgba(58, 39, 36, 0.95);
+  }
+  .nps-medallion[data-score="1"] {
+    background: linear-gradient(145deg, #ebb4ae 0%, #de9e98 100%);
+    border-color: rgba(184, 90, 82, 0.4);
+    color: rgba(58, 39, 36, 0.95);
+  }
+  .nps-medallion[data-score="2"] { background: linear-gradient(145deg, #efd4cf 0%, #e4bfb8 100%); }
+  .nps-medallion[data-score="3"] { background: linear-gradient(145deg, #f2ddd8 0%, #e9d0ca 100%); }
+  .nps-medallion[data-score="4"] { background: linear-gradient(145deg, #f4e4df 0%, #ecd8d2 100%); }
+  .nps-medallion[data-score="5"] { background: linear-gradient(145deg, #f6ebe6 0%, #efe0da 100%); }
+  .nps-medallion[data-score="6"] { background: linear-gradient(145deg, #ebe8e2 0%, #e2ded8 100%); }
+  .nps-medallion[data-score="7"] { background: linear-gradient(145deg, #e4e9e0 0%, #d8e0d6 100%); }
+  .nps-medallion[data-score="8"] { background: linear-gradient(145deg, #dbe4dc 0%, #cdd9cf 100%); }
+  .nps-medallion[data-score="9"] {
+    background: linear-gradient(145deg, #c8d9c8 0%, #b4cab4 100%);
+    border-color: rgba(120, 140, 110, 0.45);
+  }
+  .nps-medallion[data-score="10"] {
+    background: linear-gradient(145deg, #b8d0b8 0%, #9fbf9f 100%);
+    border-color: rgba(100, 130, 95, 0.5);
+    color: rgba(38, 52, 38, 0.92);
+  }
+
+  .nps-medallion.selected {
+    background: linear-gradient(135deg, var(--color-deep-rose), var(--color-maroon)) !important;
+    color: var(--color-cream);
+    border-color: var(--color-gold-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(184, 90, 82, 0.4);
+  }
+  .nps-medallion.selected::before { border-color: var(--color-gold-light); }
+
+  .nps-labels {
+    display: flex;
+    justify-content: space-between;
+    font-style: italic;
+    font-size: 0.85rem;
+    color: var(--color-ink-soft);
+    padding: 0 4px;
+    margin-top: 4px;
+  }
+
+  /* ============== CSAT_5 - Star cards (matches GRT mockup) ============== */
+  .csat5-options {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .csat5-card {
+    padding: 14px 8px 12px;
+    border: 1px solid var(--color-gold-light);
+    background: var(--color-cream);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    text-align: center;
+    font-family: 'Cormorant Garamond', serif;
+    color: var(--color-ink);
+    border-radius: 4px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .csat5-stars {
+    display: flex;
+    gap: 2px;
+    color: var(--color-gold);
+    line-height: 1;
+  }
+
+  .csat5-stars svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+  }
+
+  .csat5-card-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--color-ink);
+    letter-spacing: 0.02em;
+  }
+
+  .csat5-card:hover {
+    border-color: var(--color-gold);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(184, 146, 74, 0.2);
+  }
+
+  .csat5-card.selected {
+    background: linear-gradient(135deg, var(--color-deep-rose), var(--color-maroon));
+    border-color: var(--color-gold-dark);
+    box-shadow: 0 4px 16px rgba(184, 90, 82, 0.3);
+  }
+  .csat5-card.selected .csat5-stars { color: var(--color-gold-light); }
+  .csat5-card.selected .csat5-card-label { color: var(--color-cream); }
+
+  /* ============== Yes/No ============== */
+  .yesno-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .yesno-card {
+    padding: 16px 18px;
+    border: 1px solid var(--color-gold-light);
+    background: var(--color-cream);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    text-align: center;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--color-ink);
+    border-radius: 4px;
+  }
+
+  .yesno-card:hover {
+    border-color: var(--color-gold);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(184, 146, 74, 0.2);
+  }
+
+  .yesno-card.selected {
+    background: linear-gradient(135deg, var(--color-deep-rose), var(--color-maroon));
+    color: var(--color-cream);
+    border-color: var(--color-gold-dark);
+  }
+
+  /* ============== Single choice ============== */
+  .choice-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .choice-card {
+    padding: 14px 18px 14px 48px;
+    border: 1px solid var(--color-gold-light);
+    background: var(--color-cream);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.05rem;
+    color: var(--color-ink);
+    position: relative;
+    text-align: left;
+    width: 100%;
+    border-radius: 4px;
+  }
+
+  .choice-card::before {
+    content: '';
+    position: absolute;
+    left: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--color-gold);
+    border-radius: 50%;
+    background: var(--color-cream);
+    transition: all 0.2s ease;
+  }
+
+  .choice-card:hover {
+    border-color: var(--color-gold);
+    background: #fbf0ea;
+  }
+
+  .choice-card.selected {
+    background: linear-gradient(135deg, rgba(184, 90, 82, 0.08), rgba(184, 146, 74, 0.08));
+    border-color: var(--color-deep-rose);
+    color: var(--color-maroon);
+    font-weight: 500;
+  }
+
+  .choice-card.selected::before {
+    background: var(--color-deep-rose);
+    border-color: var(--color-maroon);
+    box-shadow: inset 0 0 0 3px var(--color-cream);
+  }
+
+  /* ============== Free text ============== */
+  .text-input-wrap {
+    position: relative;
+    margin-top: 12px;
+  }
+
+  .text-input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid var(--color-gold-light);
+    background: var(--color-cream);
+    font-family: 'Cardo', 'Cormorant Garamond', serif;
+    font-size: 1rem;
+    color: var(--color-ink);
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.6;
+    transition: all 0.2s ease;
+    border-radius: 4px;
+  }
+
+  .text-input:focus {
+    outline: none;
+    border-color: var(--color-deep-rose);
+    background: #fef6f1;
+    box-shadow: 0 0 0 3px rgba(184, 90, 82, 0.1);
+  }
+
+  .text-input::placeholder {
+    color: var(--color-ink-soft);
+    font-style: italic;
+    opacity: 0.6;
+  }
+
+  .text-counter {
+    position: absolute;
+    bottom: 8px;
+    right: 12px;
+    font-size: 0.75rem;
+    color: var(--color-ink-soft);
+    font-style: italic;
+    pointer-events: none;
+    background: rgba(254, 246, 241, 0.9);
+    padding: 2px 6px;
+  }
+
+  /* ============== Submit button ============== */
+  .submit-section {
+    margin-top: 32px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .submit-button {
+    width: auto;
+    min-width: min(440px, 100%);
+    max-width: 100%;
+    font-family: 'Cormorant SC', 'Cormorant Garamond', serif;
+    font-size: 1.125rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    background: linear-gradient(135deg, var(--color-deep-rose), var(--color-maroon));
+    color: var(--color-cream);
+    border: none;
+    padding: 26px 44px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.25s ease;
+    box-shadow: 0 4px 16px rgba(122, 42, 38, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 0;
+    border-radius: 6px;
+  }
+
+  .submit-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(122, 42, 38, 0.35);
+  }
+
+  .submit-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 20px;
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 0.95rem;
+    color: var(--color-maroon);
+  }
+
+  /* Thank you screen */
+  .thankyou {
+    text-align: center;
+    padding: 60px 24px;
+    animation: fadeIn 0.6s ease-out;
+  }
+
+  .thankyou-emblem {
+    color: var(--color-deep-rose);
+    margin-bottom: 24px;
+    animation: emblemPulse 2s ease-in-out infinite;
+  }
+
+  .thankyou-title {
+    font-family: 'Cormorant SC', serif;
+    font-size: 2.4rem;
+    color: var(--color-maroon);
+    letter-spacing: 0.18em;
+    margin-bottom: 16px;
+  }
+
+  .thankyou-message {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 1.2rem;
+    color: var(--color-ink-soft);
+    max-width: 460px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes emblemPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+
+  /* Unsupported question notice */
+  .unsupported-notice {
+    padding: 14px 16px;
+    background: rgba(184, 146, 74, 0.1);
+    border-left: 3px solid var(--color-gold);
+    font-style: italic;
+    font-size: 0.9rem;
+    color: var(--color-ink-soft);
+    margin-bottom: 24px;
+    border-radius: 0 4px 4px 0;
+  }
+
+  /* Responsive: collapse to single column on narrow screens */
+  @media (max-width: 850px) {
+    .layout-grid {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+    .hero-column {
+      order: -1;
+      min-height: 200px;
+      max-height: min(360px, 48vh);
+    }
+    .hero-image {
+      max-width: min(92%, 280px);
+      max-height: min(90%, 40vh);
+    }
+    .page-frame {
+      padding: 40px 24px;
+    }
+  }
+
+  @media (max-width: 500px) {
+    .page-frame { padding: 32px 16px; }
+    .store-name { font-size: 1.8rem; }
+    .welcome-headline { font-size: 1.5rem; }
+    .welcome-subtitle { font-size: 1.1rem; }
+    .nps-scale { gap: clamp(6px, 1.6vw, 10px); }
+    .nps-medallion { font-size: 0.85rem; }
+    .csat5-options { gap: 6px; }
+    .csat5-card { padding: 10px 4px 8px; }
+    .csat5-card-label { font-size: 0.75rem; }
+    .corner { width: 60px; height: 60px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="harness-bar">
+  <strong>PREVIEW</strong>
+  <label>Sample data:
+    <select id="sample-picker">
+      <option value="grt-full">GRT Jewellers — full survey (5 questions, all types)</option>
+      <option value="grt-minimal">GRT Jewellers — single NPS only</option>
+      <option value="boutique-long">Boutique — 7 questions (long survey)</option>
+      <option value="with-unsupported-types">GRT Jewellers — with unsupported types</option>
+    </select>
+  </label>
+  <button id="reset-btn">Reset</button>
+  <span class="submission-output" id="submission-output">Submit to see payload here</span>
+</div>
+
+<div class="template-stage">
+  <div id="template-root"></div>
+</div>
+
+<script>
+/* =============================================================================
+   JEWELRY FEEDBACK CARD TEMPLATE (static twin of React `heritage_luxury`)
+   Bundle layout:
+     ./template.html        — this file
+     ./heroImage2.png — hero on the right; white bg blends with card (multiply)
+     ./samples/*.json       — test data (loaded by harness)
+     ./manifest.json        — bundle metadata
+
+   Contract:
+     window.renderTemplate({ questions, settings, location, organization, onSubmit })
+     — organization: { name, address_line1?, address_line2?, city?, region?, postal_code? } (optional; mirrors public API)
+   ============================================================================= */
+(function () {
+  const SUPPORTED_TYPES = ['nps', 'csat_5', 'csat_yes_no', 'single_choice', 'free_text'];
+
+  const HERO_IMAGE_PATH = 'heroImage2.png';
+
+  // Inline SVG ornaments (decorative, intrinsic to the template's design)
+  const cornerOrnamentSVG = '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="currentColor" stroke-width="1"><path d="M 12 12 L 12 50" opacity="0.6"/><path d="M 12 12 L 50 12" opacity="0.6"/><path d="M 12 12 Q 30 12 30 30 Q 30 48 48 48" opacity="0.7" stroke-width="1.2"/><circle cx="22" cy="22" r="2.5" fill="currentColor" stroke="none" opacity="0.8"/><circle cx="36" cy="36" r="1.8" fill="#b85a52" stroke="none" opacity="0.7"/><circle cx="48" cy="48" r="1.5" fill="currentColor" stroke="none" opacity="0.6"/><path d="M 55 12 Q 64 18 60 28" opacity="0.5"/><path d="M 12 55 Q 18 64 28 60" opacity="0.5"/><path d="M 14 14 Q 22 20 22 28 M 14 14 Q 20 22 28 22" opacity="0.4" stroke-width="0.7"/></g></svg>';
+
+  const emblemSVG = '<svg width="64" height="68" viewBox="0 0 64 68" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="emblemGrad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#d4b878"/><stop offset="100%" stop-color="#b8924a"/></linearGradient></defs><g><path d="M 32 8 Q 22 18 22 28 Q 22 36 32 42 Q 42 36 42 28 Q 42 18 32 8 Z" fill="url(#emblemGrad)" opacity="0.9"/><path d="M 32 14 Q 26 22 26 28 Q 26 32 32 36 Q 38 32 38 28 Q 38 22 32 14 Z" fill="#b85a52" opacity="0.8"/><circle cx="32" cy="28" r="3" fill="#7a2a26"/><path d="M 32 44 L 32 58" stroke="#b8924a" stroke-width="1.5"/><path d="M 26 50 Q 32 48 38 50" stroke="#b8924a" stroke-width="1" fill="none"/><circle cx="32" cy="60" r="2" fill="#b8924a"/><path d="M 6 28 L 18 28 M 46 28 L 58 28" stroke="#b8924a" stroke-width="0.8"/><circle cx="8" cy="28" r="1.5" fill="#b8924a"/><circle cx="56" cy="28" r="1.5" fill="#b8924a"/></g></svg>';
+
+  const headerDividerSVG = '<svg width="220" height="14" viewBox="0 0 220 14" xmlns="http://www.w3.org/2000/svg"><g stroke="currentColor" stroke-width="0.8" fill="none"><line x1="0" y1="7" x2="90" y2="7"/><line x1="130" y1="7" x2="220" y2="7"/><path d="M 95 7 Q 100 2 105 7 Q 110 12 115 7" stroke="#b85a52" stroke-width="1"/><circle cx="110" cy="7" r="2" fill="#b8924a" stroke="none"/></g></svg>';
+
+  const sectionDividerSVG = '<svg width="120" height="14" viewBox="0 0 120 14" xmlns="http://www.w3.org/2000/svg"><g stroke="currentColor" stroke-width="0.7" fill="none" opacity="0.7"><line x1="0" y1="7" x2="48" y2="7"/><line x1="72" y1="7" x2="120" y2="7"/><path d="M 52 7 Q 55 4 58 7 Q 60 4 60 7 Q 62 10 65 7 Q 68 4 70 7" stroke="#b85a52"/><circle cx="60" cy="7" r="1.2" fill="#b8924a" stroke="none"/></g></svg>';
+
+  const starSVG = '<svg viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg"><path d="M 7 1 L 8.7 5.2 L 13.2 5.4 L 9.6 8.2 L 11 12.6 L 7 10.1 L 3 12.6 L 4.4 8.2 L 0.8 5.4 L 5.3 5.2 Z" fill="currentColor"/></svg>';
+
+  const thankYouEmblemSVG = '<svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="40" cy="40" r="32" opacity="0.3"/><circle cx="40" cy="40" r="24" opacity="0.5"/><path d="M 40 22 Q 30 32 30 40 Q 30 48 40 56 Q 50 48 50 40 Q 50 32 40 22 Z" fill="currentColor" opacity="0.2"/><circle cx="40" cy="40" r="4" fill="currentColor"/></g></svg>';
+
+  // DOM helper
+  function el(tag, attrs, ...children) {
+    attrs = attrs || {};
+    const node = document.createElement(tag);
+    for (const k of Object.keys(attrs)) {
+      const v = attrs[k];
+      if (k === 'class') node.className = v;
+      else if (k === 'html') node.innerHTML = v;
+      else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
+      else if (v !== null && v !== undefined) node.setAttribute(k, v);
+    }
+    for (const child of children) {
+      if (child === null || child === undefined) continue;
+      if (typeof child === 'string') node.appendChild(document.createTextNode(child));
+      else node.appendChild(child);
+    }
+    return node;
+  }
+
+  // ============== Question renderers ==============
+  function renderNps(q, state) {
+    const min = q.scale && q.scale.min !== undefined ? q.scale.min : 0;
+    const max = q.scale && q.scale.max !== undefined ? q.scale.max : 10;
+    const minLabel = q.scale && q.scale.labels ? q.scale.labels.minLabel : null;
+    const maxLabel = q.scale && q.scale.labels ? q.scale.labels.maxLabel : null;
+
+    const scale = el('div', { class: 'nps-scale' });
+    for (let i = min; i <= max; i++) {
+      const score = i;
+      const medallion = el('button', {
+        type: 'button',
+        class: 'nps-medallion',
+        'data-score': score,
+        onclick: function () {
+          state.values[q.id] = score;
+          scale.querySelectorAll('.nps-medallion').forEach(m => m.classList.remove('selected'));
+          medallion.classList.add('selected');
+          state.clearError(q.id);
+        }
+      }, String(score));
+      scale.appendChild(medallion);
+    }
+
+    const labels = (minLabel || maxLabel) ? el('div', { class: 'nps-labels' },
+      el('span', {}, minLabel || ''),
+      el('span', {}, maxLabel || '')
+    ) : null;
+
+    return [scale, labels];
+  }
+
+  function renderCsat5(q, state) {
+    const wrap = el('div', { class: 'csat5-options' });
+    const options = q.options || [
+      { value: '1', text: 'Poor' },
+      { value: '2', text: 'Fair' },
+      { value: '3', text: 'Good' },
+      { value: '4', text: 'Very Good' },
+      { value: '5', text: 'Excellent' }
+    ];
+
+    options.forEach(function (opt, idx) {
+      const starCount = idx + 1;
+      const stars = el('div', { class: 'csat5-stars' });
+      for (let s = 0; s < starCount; s++) {
+        const starWrap = el('span', { html: starSVG });
+        stars.appendChild(starWrap);
+      }
+      const label = el('div', { class: 'csat5-card-label' }, opt.text);
+
+      const card = el('button', {
+        type: 'button',
+        class: 'csat5-card',
+        onclick: function () {
+          state.values[q.id] = opt.value;
+          wrap.querySelectorAll('.csat5-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+          state.clearError(q.id);
+        }
+      });
+      card.appendChild(stars);
+      card.appendChild(label);
+      wrap.appendChild(card);
+    });
+    return [wrap];
+  }
+
+  function renderYesNo(q, state) {
+    const wrap = el('div', { class: 'yesno-options' });
+    (q.options || []).forEach(function (opt) {
+      const card = el('button', {
+        type: 'button',
+        class: 'yesno-card',
+        onclick: function () {
+          state.values[q.id] = opt.value;
+          wrap.querySelectorAll('.yesno-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+          state.clearError(q.id);
+        }
+      }, opt.text);
+      wrap.appendChild(card);
+    });
+    return [wrap];
+  }
+
+  function renderSingleChoice(q, state) {
+    const wrap = el('div', { class: 'choice-options' });
+    (q.options || []).forEach(function (opt) {
+      const card = el('button', {
+        type: 'button',
+        class: 'choice-card',
+        onclick: function () {
+          state.values[q.id] = opt.value;
+          wrap.querySelectorAll('.choice-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+          state.clearError(q.id);
+        }
+      }, opt.text);
+      wrap.appendChild(card);
+    });
+    return [wrap];
+  }
+
+  function renderFreeText(q, state) {
+    const maxLength = q.text && q.text.maxLength;
+    const multiline = !(q.text && q.text.multiline === false);
+    const wrap = el('div', { class: 'text-input-wrap' });
+
+    const counter = maxLength ? el('div', { class: 'text-counter' }, '0 / ' + maxLength) : null;
+
+    const inputAttrs = {
+      class: 'text-input',
+      placeholder: 'Share your thoughts...',
+      oninput: function (e) {
+        state.values[q.id] = e.target.value;
+        if (counter) counter.textContent = e.target.value.length + ' / ' + maxLength;
+        if (e.target.value.trim()) state.clearError(q.id);
+      }
+    };
+    if (maxLength) inputAttrs.maxlength = maxLength;
+    if (multiline) inputAttrs.rows = 4;
+    else inputAttrs.type = 'text';
+
+    const input = el(multiline ? 'textarea' : 'input', inputAttrs);
+    wrap.appendChild(input);
+    if (counter) wrap.appendChild(counter);
+    return [wrap];
+  }
+
+  const RENDERERS = {
+    nps: renderNps,
+    csat_5: renderCsat5,
+    csat_yes_no: renderYesNo,
+    single_choice: renderSingleChoice,
+    free_text: renderFreeText
+  };
+
+  function renderQuestionCard(q, state) {
+    const card = el('div', { class: 'question-card', 'data-qid': q.id });
+    const isRequired = q.response && q.response.required;
+
+    // Question prompt — handle bilingual prompts split on " / " for nicer rendering
+    const promptText = q.question ? q.question.text : '';
+    const parts = promptText.split(' / ');
+    const primary = parts[0] || '';
+    const secondary = parts[1];
+
+    const prompt = el('div', { class: 'question-prompt' }, primary);
+    if (isRequired) prompt.appendChild(el('span', { class: 'question-required-mark' }, '*'));
+    card.appendChild(prompt);
+
+    if (secondary) {
+      card.appendChild(el('div', { class: 'question-prompt-secondary' }, secondary));
+    }
+
+    if (q.help_text) card.appendChild(el('div', { class: 'question-help' }, q.help_text));
+
+    const renderer = RENDERERS[q.type];
+    if (renderer) {
+      renderer(q, state).filter(Boolean).forEach(node => card.appendChild(node));
+    }
+
+    card.appendChild(el('div', { class: 'question-error' }, 'This question is required'));
+    return card;
+  }
+
+  function validate(questions, values) {
+    const errors = [];
+    questions.forEach(function (q) {
+      if (SUPPORTED_TYPES.indexOf(q.type) === -1) return;
+      if (!(q.response && q.response.required)) return;
+      const v = values[q.id];
+      const empty = v === undefined || v === null || (typeof v === 'string' && !v.trim());
+      if (empty) errors.push(q.id);
+    });
+    return errors;
+  }
+
+  function organizationAddressLines(org) {
+    if (!org || typeof org !== 'object') return [];
+    var lines = [];
+    if (org.address_line1 && String(org.address_line1).trim()) lines.push(String(org.address_line1).trim());
+    if (org.address_line2 && String(org.address_line2).trim()) lines.push(String(org.address_line2).trim());
+    var city = org.city && String(org.city).trim();
+    var region = org.region && String(org.region).trim();
+    var postal = org.postal_code && String(org.postal_code).trim();
+    var cityRegion = [city, region].filter(Boolean).join(', ');
+    var last = [cityRegion, postal].filter(Boolean).join(cityRegion && postal ? ' ' : '');
+    if (last) lines.push(last);
+    return lines;
+  }
+
+  function renderTemplate(input) {
+    const root = document.getElementById('template-root');
+    root.innerHTML = '';
+
+    const questions = (input && input.questions) || [];
+    const settings = (input && input.settings) || {};
+    const location = (input && input.location) || {};
+    const organization = (input && input.organization) || {};
+    const onSubmit = input && input.onSubmit;
+
+    const state = {
+      values: {},
+      clearError: function (qid) {
+        const card = root.querySelector('[data-qid="' + qid + '"]');
+        if (card) card.classList.remove('has-error');
+      }
+    };
+
+    const frame = el('div', { class: 'page-frame' });
+    ['tl', 'tr', 'bl', 'br'].forEach(function (pos) {
+      frame.appendChild(el('div', { class: 'corner corner-' + pos, html: cornerOrnamentSVG }));
+    });
+
+    const grid = el('div', { class: 'layout-grid' });
+
+    // ============== Form column ==============
+    const formCol = el('div', { class: 'form-column' });
+
+    // Header
+    const header = el('div', { class: 'header' });
+    header.appendChild(el('div', { class: 'header-emblem', html: emblemSVG }));
+    var orgName = (organization.name && String(organization.name).trim()) || settings.storeName || 'Your Store';
+    header.appendChild(el('div', { class: 'store-name' }, orgName));
+    var addrLines = organizationAddressLines(organization);
+    if (addrLines.length) {
+      addrLines.forEach(function (line) {
+        header.appendChild(el('div', { class: 'store-address-line' }, line));
+      });
+    } else {
+      if (settings.tagline) header.appendChild(el('div', { class: 'store-tagline' }, settings.tagline));
+    }
+    if (settings.since) header.appendChild(el('div', { class: 'store-since' }, 'Since ' + settings.since));
+    header.appendChild(el('div', { class: 'header-divider', html: headerDividerSVG }));
+    formCol.appendChild(header);
+
+    if (settings.welcomeHeadline) {
+      formCol.appendChild(el('div', { class: 'welcome-headline' }, settings.welcomeHeadline));
+    }
+    if (settings.welcomeSubtitle) {
+      formCol.appendChild(el('div', { class: 'welcome-subtitle' }, settings.welcomeSubtitle));
+    }
+    if (location.name || location.city) {
+      const locationLine = [location.name, location.city, location.region].filter(Boolean).join(' · ');
+      formCol.appendChild(el('div', { class: 'location-line' }, locationLine));
+    }
+
+    formCol.appendChild(el('div', { class: 'section-divider', html: sectionDividerSVG }));
+
+    // Questions
+    const questionsContainer = el('div', { class: 'questions' });
+    questions.forEach(function (q) {
+      if (SUPPORTED_TYPES.indexOf(q.type) === -1) {
+        questionsContainer.appendChild(el('div', { class: 'unsupported-notice' },
+          'This question type ("' + q.type + '") is not supported by this template and will not appear to respondents.'
+        ));
+        return;
+      }
+      questionsContainer.appendChild(renderQuestionCard(q, state));
+    });
+    formCol.appendChild(questionsContainer);
+
+    // Submit
+    const submitSection = el('div', { class: 'submit-section' });
+    const submitBtn = el('button', {
+      type: 'button',
+      class: 'submit-button',
+      onclick: function () {
+        const errorIds = validate(questions, state.values);
+        root.querySelectorAll('.question-card.has-error').forEach(c => c.classList.remove('has-error'));
+        errorIds.forEach(function (qid) {
+          const card = root.querySelector('[data-qid="' + qid + '"]');
+          if (card) card.classList.add('has-error');
+        });
+        if (errorIds.length > 0) {
+          const firstError = root.querySelector('.question-card.has-error');
+          if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+
+        const answers = questions
+          .filter(function (q) { return SUPPORTED_TYPES.indexOf(q.type) !== -1; })
+          .filter(function (q) { return state.values[q.id] !== undefined; })
+          .map(function (q) { return { question_key: q.id, value: state.values[q.id] }; });
+
+        submitBtn.disabled = true;
+        if (typeof onSubmit === 'function') onSubmit({ answers: answers });
+
+        renderThankYou(settings);
+      }
+    });
+    submitBtn.appendChild(el('span', {}, 'Submit'));
+    submitSection.appendChild(submitBtn);
+    formCol.appendChild(submitSection);
+
+    if (settings.thankYouText) {
+      formCol.appendChild(el('div', { class: 'footer' }, settings.thankYouText));
+    }
+
+    grid.appendChild(formCol);
+
+    // ============== Hero column (right): photo fills column behind / beside questions ==============
+    const heroCol = el('div', { class: 'hero-column' });
+    const heroImg = el('img', {
+      class: 'hero-image',
+      src: HERO_IMAGE_PATH,
+      alt: ''
+    });
+    heroImg.addEventListener('error', function () {
+      heroCol.style.display = 'none';
+      grid.style.gridTemplateColumns = '1fr';
+    });
+    heroCol.appendChild(heroImg);
+    grid.appendChild(heroCol);
+
+    frame.appendChild(grid);
+    root.appendChild(frame);
+  }
+
+  function renderThankYou(settings) {
+    const root = document.getElementById('template-root');
+    root.innerHTML = '';
+
+    const frame = el('div', { class: 'page-frame' });
+    ['tl', 'tr', 'bl', 'br'].forEach(function (pos) {
+      frame.appendChild(el('div', { class: 'corner corner-' + pos, html: cornerOrnamentSVG }));
+    });
+
+    const ty = el('div', { class: 'thankyou' });
+    ty.appendChild(el('div', { class: 'thankyou-emblem', html: thankYouEmblemSVG }));
+    ty.appendChild(el('div', { class: 'thankyou-title' }, 'Thank You'));
+    ty.appendChild(el('div', { class: 'thankyou-message' },
+      settings.thankYouText || 'Your feedback is a treasure to us.'
+    ));
+    frame.appendChild(ty);
+
+    root.appendChild(frame);
+  }
+
+  window.renderTemplate = renderTemplate;
+})();
+
+/* =============================================================================
+   PREVIEW HARNESS — loads sample JSON files and wires the picker
+   ============================================================================= */
+(function () {
+  const picker = document.getElementById('sample-picker');
+  const output = document.getElementById('submission-output');
+  const resetBtn = document.getElementById('reset-btn');
+
+  // Inline sample data — kept in JS so the harness works even when opened
+  // directly from filesystem (where fetch() of local JSON may be blocked by
+  // browsers). In production, samples live in ./samples/*.json.
+  const SAMPLES = {
+    'grt-full': null,        // populated from inline copies below
+    'grt-minimal': null,
+    'boutique-long': null,
+    'with-unsupported-types': null
+  };
+
+  // Inline sample data (mirrors files in samples/)
+  SAMPLES['grt-full'] = {"settings":{"storeName":"GRT Jewellers","tagline":"Tradition of Trust","since":"1964","welcomeHeadline":"We value your feedback","welcomeSubtitle":"உங்கள் கருத்து எங்களுக்கு மதிப்புமிக்கது","thankYouText":"Thank you! Your feedback helps us serve you better."},"location":{"name":"T. Nagar Flagship","city":"Chennai","region":"TN"},"questions":[{"id":"q_nps_001","type":"nps","question":{"text":"How likely are you to recommend us to your friends and family?"},"scale":{"min":0,"max":10,"labels":{"minLabel":"Not likely","maxLabel":"Very likely"}},"response":{"required":true}},{"id":"q_csat5_001","type":"csat_5","question":{"text":"How would you rate the quality of our products?"},"options":[{"value":"1","text":"Poor"},{"value":"2","text":"Fair"},{"value":"3","text":"Good"},{"value":"4","text":"Very Good"},{"value":"5","text":"Excellent"}],"response":{"required":true}},{"id":"q_csat_001","type":"csat_yes_no","question":{"text":"Were you satisfied with your shopping experience today?"},"options":[{"value":"yes","text":"Yes, absolutely"},{"value":"no","text":"Not really"}],"response":{"required":true}},{"id":"q_choice_001","type":"single_choice","question":{"text":"Did you find the design and style you were looking for?"},"options":[{"value":"yes_all","text":"Yes, I found everything"},{"value":"partial","text":"I found some pieces"},{"value":"no","text":"No, I did not find what I wanted"}],"response":{"required":true}},{"id":"q_text_001","type":"free_text","question":{"text":"What can we do to make your next visit even better?"},"help_text":"Optional — but every word helps us improve","text":{"maxLength":500,"multiline":true},"response":{"required":false}}]};
+
+  SAMPLES['grt-minimal'] = {"settings":{"storeName":"GRT Jewellers","tagline":"Tradition of Trust","since":"1964","welcomeHeadline":"A quick question","thankYouText":"Your feedback shapes our craftsmanship."},"location":{"name":"Nungambakkam Boutique","city":"Chennai","region":"TN"},"questions":[{"id":"q_nps_only","type":"nps","question":{"text":"How likely are you to recommend GRT to a friend?"},"scale":{"min":0,"max":10,"labels":{"minLabel":"Not at all","maxLabel":"Very much"}},"response":{"required":true}}]};
+
+  SAMPLES['boutique-long'] = {"settings":{"storeName":"Maison Lumière","tagline":"Where light meets legacy","welcomeHeadline":"Tell us about your visit","welcomeSubtitle":"Every detail matters to us","thankYouText":"Merci beaucoup for your time."},"location":{"name":"Bandra Atelier","city":"Mumbai","region":"MH"},"questions":[{"id":"q1","type":"nps","question":{"text":"How likely are you to recommend us?"},"scale":{"min":0,"max":10,"labels":{"minLabel":"Unlikely","maxLabel":"Definitely"}},"response":{"required":true}},{"id":"q2","type":"csat_5","question":{"text":"How was the ambiance of our atelier?"},"options":[{"value":"1","text":"Poor"},{"value":"2","text":"Fair"},{"value":"3","text":"Good"},{"value":"4","text":"Very Good"},{"value":"5","text":"Excellent"}],"response":{"required":true}},{"id":"q3","type":"csat_5","question":{"text":"How would you rate our staff's attentiveness?"},"options":[{"value":"1","text":"Poor"},{"value":"2","text":"Fair"},{"value":"3","text":"Good"},{"value":"4","text":"Very Good"},{"value":"5","text":"Excellent"}],"response":{"required":true}},{"id":"q4","type":"csat_yes_no","question":{"text":"Did our atelier feel welcoming?"},"options":[{"value":"yes","text":"Yes"},{"value":"no","text":"No"}],"response":{"required":true}},{"id":"q5","type":"single_choice","question":{"text":"What brought you to us today?"},"options":[{"value":"gift","text":"Looking for a gift"},{"value":"self","text":"Treating myself"},{"value":"occasion","text":"For a special occasion"},{"value":"browse","text":"Just browsing"}],"response":{"required":true}},{"id":"q6","type":"single_choice","question":{"text":"How did you hear about us?"},"options":[{"value":"friend","text":"Friend or family"},{"value":"social","text":"Social media"},{"value":"walked_by","text":"Walked by the store"},{"value":"other","text":"Other"}],"response":{"required":false}},{"id":"q7","type":"free_text","question":{"text":"What stood out about your visit?"},"help_text":"Anything that delighted or disappointed","text":{"maxLength":300,"multiline":true},"response":{"required":false}}]};
+
+  SAMPLES['with-unsupported-types'] = {"settings":{"storeName":"GRT Jewellers","tagline":"Tradition of Trust","since":"1964","welcomeHeadline":"Quick feedback","thankYouText":"Thank you!"},"location":{"name":"T. Nagar Flagship","city":"Chennai","region":"TN"},"questions":[{"id":"q_nps","type":"nps","question":{"text":"How likely are you to recommend us?"},"scale":{"min":0,"max":10,"labels":{"minLabel":"Not likely","maxLabel":"Very likely"}},"response":{"required":true}},{"id":"q_phone","type":"phone","question":{"text":"What is your phone number?"},"response":{"required":false}},{"id":"q_email","type":"email","question":{"text":"Email for our newsletter?"},"response":{"required":false}},{"id":"q_text","type":"free_text","question":{"text":"Any other comments?"},"text":{"maxLength":200,"multiline":true},"response":{"required":false}}]};
+
+  function loadSample(key) {
+    const sample = SAMPLES[key];
+    if (!sample) return;
+
+    output.textContent = 'Submit to see payload here';
+    output.classList.remove('has-data');
+
+    var inferredOrg = sample.organization || {
+      name: sample.settings && sample.settings.storeName,
+      address_line1: '126 T. Nagar High Road',
+      address_line2: 'Near Panagal Park',
+      city: sample.location && sample.location.city,
+      region: sample.location && sample.location.region,
+      postal_code: '600017'
+    };
+
+    window.renderTemplate({
+      settings: sample.settings,
+      location: sample.location,
+      organization: inferredOrg,
+      questions: sample.questions,
+      onSubmit: function (payload) {
+        const summary = 'Submitted ' + payload.answers.length + ' answer(s): ' + JSON.stringify(payload.answers);
+        output.textContent = summary;
+        output.classList.add('has-data');
+        console.log('Full submission payload:', payload);
+      }
+    });
+  }
+
+  picker.addEventListener('change', function () { loadSample(picker.value); });
+  resetBtn.addEventListener('click', function () { loadSample(picker.value); });
+
+  loadSample('grt-full');
+})();
+</script>
+
+</body>
+</html>

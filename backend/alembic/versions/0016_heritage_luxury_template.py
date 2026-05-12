@@ -1,4 +1,4 @@
-"""Add heritage_luxury survey template (dual-column glass panel + hero).
+"""Add heritage_luxury survey template (jewelry feedback card + hero).
 
 Revision ID: 0016_tpl_heritage_luxury
 Revises: 0015_heritage_pres
@@ -46,7 +46,7 @@ def upgrade() -> None:
                 "Gold star CSAT, maroon serif headings, metallic submit control—ideal for jewellery and couture retail."
             ),
             "notes": (
-                "Hero image ships as /feedback-theme/heritage-luxury-hero.png (replace for your brand model). "
+                "Hero image: /feedback-theme/jewelry-feedback-hero.png (replace for your brand). "
                 "Uses survey.description as the small closing line under Submit (default: “Thank you!”). "
                 "Playfair Display loads from Google Fonts for headings."
             ),

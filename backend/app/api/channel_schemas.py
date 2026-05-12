@@ -61,6 +61,17 @@ class PublicLocationResponse(BaseModel):
     region: str | None
 
 
+class PublicOrganizationResponse(BaseModel):
+    """Tenant legal / storefront profile for templates that show org in the header (optional for others)."""
+
+    name: str
+    address_line1: str | None = None
+    address_line2: str | None = None
+    city: str | None = None
+    region: str | None = None
+    postal_code: str | None = None
+
+
 class PublicSurveyTemplatePayload(BaseModel):
     id: UUID
     slug: str
@@ -73,7 +84,9 @@ class PublicFeedbackContextResponse(BaseModel):
     channel_type: ChannelType
     tenant_id: UUID
     location: PublicLocationResponse
+    organization: PublicOrganizationResponse
     branding: PublicBrandingResponse
+    effective_theme: dict[str, str] = Field(default_factory=dict)
     survey_version_id: UUID
     survey: dict
     questions: list[dict]

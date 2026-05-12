@@ -125,3 +125,4 @@ class PermissionCode(StrEnum):
     ANALYTICS_READ = "analytics:read"
     AUDIT_READ = "audit:read"
     PII_DECRYPT = "pii:decrypt"
+    PLATFORM_MANAGE = "platform:manage"

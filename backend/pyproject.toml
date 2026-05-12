@@ -14,8 +14,10 @@ dependencies = [
   "cryptography",
   "email-validator",
   "fastapi",
+  "httpx",
   "prometheus-fastapi-instrumentator",
   "pydantic-settings",
+  "python-multipart",
   "PyJWT[crypto]",
   "qrcode[pil]",
   "redis",
@@ -23,6 +25,10 @@ dependencies = [
   "structlog",
   "uvicorn[standard]",
 ]
+
+[project.scripts]
+goli-feedback-worker = "app.cli.run_feedback_worker:main"
+goli-bootstrap-platform-admin = "app.cli.bootstrap_platform_admin:main"
 
 [project.optional-dependencies]
 dev = [

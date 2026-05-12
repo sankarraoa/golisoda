@@ -1,4 +1,30 @@
 :root {
+  /* Theme-token canonical variables (default_stepper baseline).
+   *
+   * NOTE: `--color-brand-primary/secondary` are defined in terms of the legacy
+   * tenant vars so existing runtime branding overrides (which currently write
+   * `--color-tenant-*`) continue to affect canonical variables.
+   */
+  --color-background: #f8f9fa;
+  --color-surface: #ffffff;
+  --color-border: #e8eaed;
+
+  --color-brand-primary: var(--color-tenant-primary, #1a73e8);
+  --color-brand-secondary: var(--color-tenant-secondary, #e8f0fe);
+  --color-brand-accent: var(--color-brand-primary, #1a73e8);
+
+  --font-body: "Google Sans", "Roboto", system-ui, sans-serif;
+  --font-heading: "Google Sans", "Roboto", system-ui, sans-serif;
+  --font-size-base: 14px;
+
+  --spacing-page: 24px;
+  --spacing-question-gap: 32px;
+
+  --radius-card: 12px;
+  --radius-input: 8px;
+
+  --shadow-card: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+
   --color-bg-base: #ffffff;
   --color-bg-subtle: #f8f9fa;
   --color-bg-muted: #f1f3f4;
