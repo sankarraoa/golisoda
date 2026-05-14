@@ -1026,12 +1026,16 @@ tbody tr:hover .channel-row-actions,
 .templates-library-catalog .template-gallery {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   margin-top: 0;
   max-height: min(72vh, 720px);
   overflow-y: auto;
   padding-right: 6px;
   -webkit-overflow-scrolling: touch;
+}
+
+.templates-library-catalog .template-gallery-card {
+  padding: 10px 12px;
 }
 
 .templates-library-preview {
@@ -1069,11 +1073,39 @@ tbody tr:hover .channel-row-actions,
   max-width: 60ch;
 }
 
+.template-preview-panel-desc--compact {
+  max-width: 52ch;
+  line-height: 1.4;
+}
+
+.template-preview-panel-desc--compact .template-gallery-card-desc-line {
+  display: block;
+}
+
+.template-preview-panel-desc--compact .template-gallery-card-desc-line + .template-gallery-card-desc-line {
+  margin-top: 4px;
+}
+
 .templates-library .template-gallery-card-desc {
   margin: 0 0 10px;
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
   line-height: var(--leading-normal);
+}
+
+.templates-library .template-gallery-card-desc--catalog {
+  margin: 6px 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.38;
+}
+
+.templates-library .template-gallery-card-desc-line {
+  display: block;
+}
+
+.templates-library .template-gallery-card-desc-line + .template-gallery-card-desc-line {
+  margin-top: 3px;
 }
 
 .templates-library .template-gallery-card-tip {

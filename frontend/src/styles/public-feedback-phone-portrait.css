@@ -1,0 +1,236 @@
+/**
+ * Phone portrait — template slug `phone_portrait`.
+ * Portrait-first handheld: safe areas, readable type, comfortable vertical rhythm, dot progress.
+ */
+
+.public-shell[data-template="phone_portrait"] {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: max(var(--spacing-page, 24px), env(safe-area-inset-top, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  box-sizing: border-box;
+  background: var(--color-bg-base);
+}
+
+.public-shell[data-template="phone_portrait"] .public-card {
+  width: 100%;
+  max-width: min(428px, 100%);
+  margin-left: auto;
+  margin-right: auto;
+  border-radius: var(--radius-card, 12px);
+  overflow: hidden;
+}
+
+.public-shell[data-template="phone_portrait"] .public-header {
+  padding: 20px 18px 14px;
+  text-align: center;
+}
+
+.public-shell[data-template="phone_portrait"] .tenant-logo,
+.public-shell[data-template="phone_portrait"] .tenant-logo-fallback {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 14px;
+}
+
+.public-shell[data-template="phone_portrait"] .public-title {
+  font-size: clamp(1.25rem, 4.2vw, 1.5rem);
+  line-height: 1.25;
+  font-weight: var(--font-semibold, 600);
+}
+
+.public-shell[data-template="phone_portrait"] .public-subtitle {
+  margin-top: 8px;
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+}
+
+.public-shell[data-template="phone_portrait"] .public-progress--dots {
+  padding: 14px 16px 10px;
+  gap: 9px;
+  background: var(--color-bg-muted);
+}
+
+.public-shell[data-template="phone_portrait"] .public-progress-dot {
+  width: 9px;
+  height: 9px;
+}
+
+.public-shell[data-template="phone_portrait"] .public-body {
+  padding: 22px 18px 20px;
+}
+
+.public-shell[data-template="phone_portrait"] .question-kicker {
+  text-align: center;
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin-bottom: 10px;
+}
+
+.public-shell[data-template="phone_portrait"] .question-title {
+  text-align: center;
+  font-size: clamp(1.05rem, 3.8vw, 1.2rem);
+  line-height: 1.4;
+  max-width: 38ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.public-shell[data-template="phone_portrait"] .question-help {
+  text-align: center;
+  margin-top: 10px;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  max-width: 40ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.public-shell[data-template="phone_portrait"] .answer-area {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* NPS heatmap — equal square cells for touch */
+.public-shell[data-template="phone_portrait"] .nps-options--heatmap {
+  --nps-gap: 5px;
+  gap: var(--nps-gap);
+  width: 100%;
+  max-width: 100%;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+}
+
+.public-shell[data-template="phone_portrait"] .nps-heatmap-cell {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: max(
+    44px,
+    min(56px, calc((100% - 10 * var(--nps-gap)) / 11))
+  );
+  aspect-ratio: 1;
+  height: auto;
+  min-height: 0;
+  border-radius: 10px;
+  padding: 0;
+}
+
+.public-shell[data-template="phone_portrait"] .nps-heatmap-cell-label {
+  font-size: clamp(0.85rem, 3vw, 1rem);
+  font-weight: var(--font-semibold, 600);
+}
+
+.public-shell[data-template="phone_portrait"] .scale-labels--heatmap-nps {
+  margin-top: 14px;
+  font-size: var(--text-xs);
+  padding: 0 4px;
+}
+
+/* Emoji CSAT — slightly larger than default for portrait distance */
+.public-shell[data-template="phone_portrait"] .emoji-scale--csat .emoji-scale-row {
+  gap: clamp(8px, 2.5vw, 12px);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.public-shell[data-template="phone_portrait"] .emoji-scale--csat .emoji-scale-button {
+  min-height: 92px;
+  min-width: 64px;
+  padding: 12px 10px;
+  border-radius: 14px;
+}
+
+.public-shell[data-template="phone_portrait"] .emoji-scale--csat .emoji-scale-glyph {
+  font-size: clamp(1.75rem, 6vw, 2.25rem);
+  line-height: 1;
+}
+
+.public-shell[data-template="phone_portrait"] .emoji-scale--csat .emoji-scale-caption {
+  font-size: 10px;
+  line-height: 1.25;
+  max-width: 76px;
+}
+
+/* Thumbs binary */
+.public-shell[data-template="phone_portrait"] .thumbs-scale {
+  gap: clamp(20px, 6vw, 28px);
+}
+
+.public-shell[data-template="phone_portrait"] .thumbs-scale-button {
+  min-width: 112px;
+  min-height: 128px;
+  border-radius: 16px;
+}
+
+.public-shell[data-template="phone_portrait"] .thumbs-scale-button .emoji-scale-glyph {
+  font-size: clamp(2.5rem, 10vw, 3rem);
+}
+
+/* Chips & fields */
+.public-shell[data-template="phone_portrait"] .option-list--inline .option-button {
+  min-height: 48px;
+  padding: 12px 18px;
+  font-size: var(--text-base);
+}
+
+.public-shell[data-template="phone_portrait"] .answer-area .field {
+  align-self: stretch;
+  width: 100%;
+  max-width: min(26rem, 100%);
+}
+
+.public-shell[data-template="phone_portrait"] .field-input {
+  min-height: 48px;
+  font-size: var(--text-base);
+  border-radius: 10px;
+}
+
+.public-shell[data-template="phone_portrait"] textarea.field-input {
+  min-height: 120px;
+}
+
+/* Footer CTA — primary at bottom for natural thumb reach */
+.public-shell[data-template="phone_portrait"] .public-footer {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 16px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+.public-shell[data-template="phone_portrait"] .public-footer .btn--ghost {
+  align-self: center;
+  min-height: 44px;
+  padding: 10px 16px;
+}
+
+.public-shell[data-template="phone_portrait"] .public-footer .btn--tenant {
+  width: 100%;
+  min-height: 52px;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold, 600);
+  border-radius: 12px;
+  justify-content: center;
+  text-align: center;
+}
+
+.public-shell[data-template="phone_portrait"] .public-powered {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+@media (min-width: 600px) {
+  .public-shell[data-template="phone_portrait"] {
+    justify-content: center;
+  }
+}

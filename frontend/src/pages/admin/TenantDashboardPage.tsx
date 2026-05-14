@@ -31,6 +31,7 @@ import {
   updateSurveyQuestion,
   patchSurveyQuestion,
 } from "../../lib/adminApi";
+import { getTemplateCatalogSummaryLines } from "../../lib/templateCatalogSummary";
 import type {
   Channel,
   DashboardData,
@@ -351,6 +352,14 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
     onSignedOut();
   }
 
+  /** Leaving the survey builder / create flow when switching sidebar views (builder only closed via ← Surveys before). */
+  function selectAdminView(view: ActiveAdminView) {
+    setActiveSurveyBuilderId(null);
+    setIsCreatingSurvey(false);
+    setActiveCreateModal(null);
+    setActiveView(view);
+  }
+
   const activeViewConfig = VIEW_CONFIG[activeView];
   const createModalType = createModalTypeForView(activeView);
   const can = (permissionCode: string) => me?.permission_codes.includes(permissionCode) ?? false;
@@ -399,7 +408,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
               collapsed={sidebarCollapsed}
               icon="dashboard"
               label="Dashboard"
-              onSelect={setActiveView}
+              onSelect={selectAdminView}
               view="dashboard"
             />
             <div className="nav-section-label">Manage</div>
@@ -409,7 +418,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
                 collapsed={sidebarCollapsed}
                 icon="location_on"
                 label="Locations"
-                onSelect={setActiveView}
+                onSelect={selectAdminView}
                 view="locations"
               />
             ) : null}
@@ -419,7 +428,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
                 collapsed={sidebarCollapsed}
                 icon="assignment"
                 label="Surveys"
-                onSelect={setActiveView}
+                onSelect={selectAdminView}
                 view="surveys"
               />
             ) : null}
@@ -429,7 +438,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
                 collapsed={sidebarCollapsed}
                 icon="qr_code_2"
                 label="Channel"
-                onSelect={setActiveView}
+                onSelect={selectAdminView}
                 view="channels"
               />
             ) : null}
@@ -439,7 +448,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
                 collapsed={sidebarCollapsed}
                 icon="inbox"
                 label="Response"
-                onSelect={setActiveView}
+                onSelect={selectAdminView}
                 view="responses"
               />
             ) : null}
@@ -451,7 +460,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
                   collapsed={sidebarCollapsed}
                   icon="bar_chart"
                   label="Analytics"
-                  onSelect={setActiveView}
+                  onSelect={selectAdminView}
                   view="analytics"
                 />
               </>
@@ -463,7 +472,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
                 collapsed={sidebarCollapsed}
                 icon="business"
                 label="Organization"
-                onSelect={setActiveView}
+                onSelect={selectAdminView}
                 view="organization"
               />
             ) : null}
@@ -473,7 +482,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
                 collapsed={sidebarCollapsed}
                 icon="style"
                 label="Templates"
-                onSelect={setActiveView}
+                onSelect={selectAdminView}
                 view="templates"
               />
             ) : null}
@@ -483,7 +492,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
                 collapsed={sidebarCollapsed}
                 icon="group"
                 label="Users"
-                onSelect={setActiveView}
+                onSelect={selectAdminView}
                 view="users"
               />
             ) : null}
@@ -493,7 +502,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
                 collapsed={sidebarCollapsed}
                 icon="admin_panel_settings"
                 label="Roles"
-                onSelect={setActiveView}
+                onSelect={selectAdminView}
                 view="roles"
               />
             ) : null}
@@ -4281,12 +4290,16 @@ function TemplateLibrarySection({
     ...(brandingPreview.secondary_color ? { "--color-tenant-secondary": brandingPreview.secondary_color } : {}),
   } as CSSProperties;
 
+  const [previewSummary1, previewSummary2] = getTemplateCatalogSummaryLines(selected);
+
   return (
     <div className="templates-library">
       <div className="templates-library-body">
         <div className="templates-library-catalog">
           <div className="template-gallery" role="list">
-            {templates.map((template) => (
+            {templates.map((template) => {
+              const [summaryLine1, summaryLine2] = getTemplateCatalogSummaryLines(template);
+              return (
               <button
                 key={template.id}
                 type="button"
@@ -4297,19 +4310,23 @@ function TemplateLibrarySection({
                 onClick={() => setSelectedId(template.id)}
               >
                 <div className="template-gallery-card-title">{template.name}</div>
-                {template.description ? <p className="template-gallery-card-desc">{template.description}</p> : null}
-                {template.deployment_notes ? (
-                  <p className="template-gallery-card-tip">{template.deployment_notes}</p>
-                ) : null}
+                <p className="template-gallery-card-desc template-gallery-card-desc--catalog">
+                  <span className="template-gallery-card-desc-line">{summaryLine1}</span>
+                  <span className="template-gallery-card-desc-line">{summaryLine2}</span>
+                </p>
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
         <div className="templates-library-preview">
           <header className="template-preview-panel-header">
             <span className="template-preview-badge">Preview</span>
             <h3 className="template-preview-panel-title">{selected.name}</h3>
-            {selected.description ? <p className="template-preview-panel-desc">{selected.description}</p> : null}
+            <p className="template-preview-panel-desc template-preview-panel-desc--compact">
+              <span className="template-gallery-card-desc-line">{previewSummary1}</span>
+              <span className="template-gallery-card-desc-line">{previewSummary2}</span>
+            </p>
           </header>
           <div className="template-gallery-preview-wrap template-gallery-preview-host" style={hostStyle}>
             <FeedbackFlow

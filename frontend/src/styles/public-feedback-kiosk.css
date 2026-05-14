@@ -43,8 +43,14 @@
 
 .public-shell[data-template="kiosk_touch"] .tenant-logo,
 .public-shell[data-template="kiosk_touch"] .tenant-logo-fallback {
-  width: 56px;
-  height: 56px;
+  width: 80px;
+  height: 80px;
+}
+
+.public-shell[data-template="kiosk_touch"] .tenant-logo-fallback--org-icon .material-symbols-outlined {
+  font-size: 40px;
+  font-weight: 300;
+  line-height: 1;
 }
 
 .public-shell[data-template="kiosk_touch"] .public-body {
@@ -84,33 +90,49 @@
 }
 
 .public-shell[data-template="kiosk_touch"] .nps-options--heatmap {
-  gap: 4px;
-  max-width: 26rem;
+  --nps-gap: clamp(6px, 1.2vw, 10px);
+  gap: var(--nps-gap);
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
   margin-left: auto;
   margin-right: auto;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
 }
 
+/* Equal large squares: side = share of row, clamped for touch (scrolls if needed on narrow viewports). */
 .public-shell[data-template="kiosk_touch"] .nps-heatmap-cell {
-  flex: 0 1 auto;
-  width: clamp(28px, 7.5vmin, 36px);
-  min-height: clamp(28px, 7.5vmin, 34px);
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: max(
+    52px,
+    min(84px, calc((100% - 10 * var(--nps-gap)) / 11))
+  );
+  aspect-ratio: 1;
+  height: auto;
+  min-width: 0;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .public-shell[data-template="kiosk_touch"] .nps-heatmap-cell-label {
-  font-size: 14px;
+  font-size: clamp(18px, 3.4vmin, 24px);
   font-weight: var(--font-medium);
   letter-spacing: -0.15px;
   color: var(--kiosk-page-title);
 }
 
 .public-shell[data-template="kiosk_touch"] .scale-labels--heatmap-nps {
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--kiosk-muted);
-  margin-top: 14px;
-  max-width: 26rem;
+  margin-top: 16px;
+  width: 100%;
+  max-width: 100%;
   margin-left: auto;
   margin-right: auto;
 }
@@ -180,21 +202,22 @@
 
 /* CSAT emoji rows */
 .public-shell[data-template="kiosk_touch"] .emoji-scale--csat .emoji-scale-button {
-  min-height: 88px;
-  padding: 12px;
-  border-radius: 10px;
-  gap: 8px;
+  min-height: 108px;
+  min-width: clamp(72px, 16vw, 104px);
+  padding: 14px 12px;
+  border-radius: 12px;
+  gap: 10px;
   background: var(--color-bg-base);
 }
 
 .public-shell[data-template="kiosk_touch"] .emoji-scale--csat .emoji-scale-row {
-  gap: 8px;
+  gap: clamp(8px, 2vw, 14px);
   justify-content: center;
 }
 
 .public-shell[data-template="kiosk_touch"] .emoji-scale--csat .emoji-scale-glyph {
-  font-size: 36px;
-  line-height: 40px;
+  font-size: clamp(48px, 9vmin, 64px);
+  line-height: 1.1;
 }
 
 .public-shell[data-template="kiosk_touch"] .emoji-scale--csat .emoji-scale-caption {
@@ -278,10 +301,24 @@
 }
 
 /* Form fields */
+.public-shell[data-template="kiosk_touch"] .answer-area .field {
+  align-self: stretch;
+  width: 100%;
+  max-width: min(40rem, 100%);
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .public-shell[data-template="kiosk_touch"] .field-input {
+  width: 100%;
+  min-height: 48px;
   background: var(--kiosk-field-fill);
   border-color: transparent;
   border-radius: 8px;
+}
+
+.public-shell[data-template="kiosk_touch"] textarea.field-input {
+  min-height: 140px;
 }
 
 .public-shell[data-template="kiosk_touch"] .field-input:focus {
@@ -293,33 +330,40 @@
   text-align: left;
 }
 
-/* Footer CTA strip */
+/* Footer: Back on the left, Next/Submit on the right */
 .public-shell[data-template="kiosk_touch"] .public-footer {
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-wrap: nowrap;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
   padding: 16px 16px 20px;
   border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .public-shell[data-template="kiosk_touch"] .public-footer .btn--ghost {
-  order: 2;
-  flex-basis: 100%;
+  flex: 0 0 auto;
+  min-height: 48px;
+  padding: 12px 20px;
 }
 
 .public-shell[data-template="kiosk_touch"] .public-footer .btn--tenant {
-  order: 1;
-  flex: 1 1 auto;
-  min-width: min(416px, 100%);
-  min-height: 40px;
-  margin: 0 auto;
+  flex: 0 1 auto;
+  min-height: 48px;
+  min-width: 0;
+  margin: 0;
   border-radius: 8px;
   background: var(--kiosk-sticky-cta);
   color: #fff;
   border: none;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 15px;
+  line-height: 22px;
   font-weight: var(--font-medium);
   letter-spacing: -0.15px;
+  padding-left: 22px;
+  padding-right: 22px;
 }
 
 .public-shell[data-template="kiosk_touch"] .public-footer .btn--tenant:hover:not(:disabled) {

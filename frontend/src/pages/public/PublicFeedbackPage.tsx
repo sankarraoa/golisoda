@@ -8,6 +8,11 @@ import { resolveSurveyPresentation } from "../../types/publicFeedback";
 
 type ViewState = "loading" | "ready" | "submitted" | "error";
 
+/** Per-channel session flag so QR/mobile users keep the thank-you message after refresh (kiosk does not use this). */
+function feedbackCompleteStorageKey(channelCode: string) {
+  return `goli-feedback-complete-${channelCode}`;
+}
+
 function getChannelCodeFromPath(): string {
   const segments = window.location.pathname.split("/").filter(Boolean);
   if (segments[0] === "f" && segments[1]) {
@@ -48,8 +53,35 @@ export function PublicFeedbackPage() {
         if (!isMounted) {
           return;
         }
+        const pageUrl = new URL(window.location.href);
+        const isCompleteUrl = pageUrl.searchParams.get("complete") === "1";
+        const treatAsKiosk =
+          nextContext.channel_type === "kiosk" || pageUrl.searchParams.get("kiosk") === "1";
+
         setContext(nextContext);
-        setViewState("ready");
+
+        if (isCompleteUrl && !treatAsKiosk) {
+          try {
+            const raw = sessionStorage.getItem(feedbackCompleteStorageKey(channelCode));
+            if (raw) {
+              const parsed = JSON.parse(raw) as { thank_you_text?: string };
+              setThankYouText(parsed.thank_you_text ?? null);
+            } else {
+              setThankYouText(null);
+            }
+          } catch {
+            setThankYouText(null);
+          }
+          setViewState("submitted");
+        } else {
+          try {
+            sessionStorage.removeItem(feedbackCompleteStorageKey(channelCode));
+          } catch {
+            /* ignore */
+          }
+          setThankYouText(null);
+          setViewState("ready");
+        }
       } catch (error) {
         if (isMounted) {
           setSubmitError(error instanceof Error ? error.message : "Something went wrong.");
@@ -203,6 +235,16 @@ export function PublicFeedbackPage() {
             },
           });
           setThankYouText(response.thank_you_text);
+          if (context.channel_type !== "kiosk" && !kioskUrlOverride) {
+            try {
+              sessionStorage.setItem(
+                feedbackCompleteStorageKey(channelCode),
+                JSON.stringify({ thank_you_text: response.thank_you_text }),
+              );
+            } catch {
+              /* private / restricted storage */
+            }
+          }
           setViewState("submitted");
         } catch (error) {
           setSubmitError(error instanceof Error ? error.message : "Your response was not saved.");

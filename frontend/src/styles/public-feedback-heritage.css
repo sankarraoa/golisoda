@@ -26,7 +26,9 @@
   width: 100%;
   max-width: min(440px, 100%);
   min-height: min(100vh, 900px);
+  min-height: min(100dvh, 900px);
   margin: 0 auto;
+  padding-bottom: env(safe-area-inset-bottom, 0);
   overflow: hidden;
   background: var(--heritage-cream);
   border-radius: 0;
@@ -35,9 +37,28 @@
   flex-direction: column;
 }
 
-.public-shell[data-template="heritage_immersive"] .public-progress {
+.public-shell[data-template="heritage_immersive"] .public-progress:not(.public-progress--dots) {
   display: none;
 }
+
+.public-shell[data-template="heritage_immersive"] .public-progress--dots {
+  flex-shrink: 0;
+  padding: 14px 20px 10px;
+  background: linear-gradient(180deg, var(--heritage-cream-deep), var(--heritage-cream));
+  border-bottom: 1px solid rgba(201, 162, 39, 0.2);
+  gap: 10px;
+}
+
+.public-shell[data-template="heritage_immersive"] .public-progress-dot {
+  width: 9px;
+  height: 9px;
+  background: rgba(79, 26, 40, 0.22);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5);
+}
+
+.public-shell[data-template="heritage_immersive"] .public-progress-dot--filled {
+  background: var(--heritage-maroon);
+  box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.35);
 
 /* ── Hero crown (maroon dome + motif) ─────────────────────────────────── */
 .public-shell[data-template="heritage_immersive"] .heritage-hero {
@@ -176,6 +197,7 @@
   box-shadow: 0 16px 36px rgba(58, 18, 28, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .public-shell[data-template="heritage_immersive"] .question-kicker {
@@ -329,10 +351,11 @@
   padding: 0 clamp(8px, 3vw, 16px);
   color: var(--heritage-ink-soft);
   font-size: clamp(0.875rem, 2.8vw, 1rem);
-  font-weight: var(--font-medium);
-  font-family: var(--font-sans);
-  letter-spacing: 0.03em;
-  line-height: 1.45;
+  font-weight: 400;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
 }
 
 .public-shell[data-template="heritage_immersive"] .heritage-footer-preview {
@@ -459,6 +482,151 @@
 .public-shell[data-template="heritage_immersive"] .option-button:hover,
 .public-shell[data-template="heritage_immersive"] .scale-button:hover {
   border-color: var(--heritage-gold);
+}
+
+/* NPS heatmap — warm palette aligned with cream / maroon / gold (replaces default harsh reds) */
+.public-shell[data-template="heritage_immersive"] .nps-options--heatmap {
+  gap: clamp(5px, 1.5vw, 9px);
+}
+
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell {
+  border-radius: 11px;
+  min-height: 46px;
+}
+
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell-label {
+  color: var(--heritage-ink);
+  font-weight: var(--font-semibold, 600);
+  font-variant-numeric: tabular-nums;
+}
+
+.public-shell[data-template="heritage_immersive"] .scale-labels--heatmap-nps {
+  color: var(--heritage-ink-soft);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell--s0,
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell--s1,
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell--s2 {
+  background: linear-gradient(180deg, #e5c9c4, #dcb8b2);
+}
+
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell--s3,
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell--s4,
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell--s5 {
+  background: linear-gradient(180deg, #ead4bc, #dfc4a5);
+}
+
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell--s6 {
+  background: linear-gradient(180deg, #e8d9b8, #dcc698);
+}
+
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell--s7,
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell--s8 {
+  background: linear-gradient(180deg, #e6deb0, #d4c985);
+}
+
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell--s9,
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell--s10 {
+  background: linear-gradient(180deg, #c5d9b8, #a8c49a);
+}
+
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell--selected {
+  box-shadow:
+    inset 0 0 0 2px var(--heritage-gold),
+    0 4px 14px rgba(58, 18, 28, 0.18);
+  transform: none;
+}
+
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell:hover:not(:disabled) {
+  filter: brightness(1.03);
+}
+
+/* Binary / thumbs CSAT */
+.public-shell[data-template="heritage_immersive"] .thumbs-scale {
+  gap: clamp(18px, 5vw, 28px);
+  justify-content: center;
+}
+
+.public-shell[data-template="heritage_immersive"] .thumbs-scale-button {
+  min-width: 108px;
+  min-height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 254, 248, 0.95);
+  border: 2px solid rgba(201, 162, 39, 0.35);
+  box-shadow: 0 6px 20px rgba(58, 18, 28, 0.08);
+}
+
+.public-shell[data-template="heritage_immersive"] .thumbs-scale-button:hover {
+  border-color: var(--heritage-gold);
+}
+
+.public-shell[data-template="heritage_immersive"] .thumbs-scale-button--selected {
+  background: linear-gradient(165deg, #fff9e8, #f0e0bc);
+  border-color: var(--heritage-gold);
+  box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.3);
+}
+
+.public-shell[data-template="heritage_immersive"] .thumbs-scale-button--selected .thumbs-caption {
+  color: var(--heritage-maroon);
+  font-weight: var(--font-semibold, 600);
+}
+
+.public-shell[data-template="heritage_immersive"] .thumbs-caption {
+  color: var(--heritage-ink-soft);
+}
+
+/* Single / multi option chips */
+.public-shell[data-template="heritage_immersive"] .option-list {
+  gap: 12px;
+}
+
+.public-shell[data-template="heritage_immersive"] .option-button--selected {
+  background: var(--heritage-maroon);
+  border-color: var(--heritage-maroon);
+  color: #fffef8;
+  box-shadow: 0 6px 18px rgba(58, 18, 28, 0.22);
+}
+
+.public-shell[data-template="heritage_immersive"] .option-button--selected:hover {
+  border-color: var(--heritage-maroon-deep);
+}
+
+.public-shell[data-template="heritage_immersive"] .option-button--multi-selected {
+  border-color: var(--heritage-gold);
+  background: linear-gradient(165deg, #fffef8, #f5ead8);
+}
+
+.public-shell[data-template="heritage_immersive"] .multi-select-hint {
+  color: var(--heritage-ink-soft);
+}
+
+/* Form labels & focus */
+.public-shell[data-template="heritage_immersive"] .field-label {
+  color: var(--heritage-ink-soft);
+  font-weight: var(--font-medium);
+  letter-spacing: 0.02em;
+}
+
+.public-shell[data-template="heritage_immersive"] .field-input:focus,
+.public-shell[data-template="heritage_immersive"] .option-button:focus-visible,
+.public-shell[data-template="heritage_immersive"] .nps-heatmap-cell:focus-visible,
+.public-shell[data-template="heritage_immersive"] .emoji-scale--csat .emoji-scale-button:focus-visible,
+.public-shell[data-template="heritage_immersive"] .thumbs-scale-button:focus-visible,
+.public-shell[data-template="heritage_immersive"] .public-footer .btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.45);
+}
+
+.public-shell[data-template="heritage_immersive"] .public-footer .btn--tenant:focus-visible {
+  box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.5), 0 8px 24px rgba(58, 18, 28, 0.28);
+}
+
+.public-shell[data-template="heritage_immersive"] .public-footer .btn--tenant:disabled {
+  opacity: 0.55;
+  box-shadow: none;
 }
 
 @media (max-width: 480px) {

@@ -15,12 +15,23 @@ import { QuestionRenderer, validateQuestionAnswer } from "./QuestionRenderer";
 function TenantLogoFeedback({
   branding,
   surveyTitle,
+  logoFallback = "initial",
 }: {
   branding: PublicBranding;
   surveyTitle: string;
+  /** Kiosk uses a storefront glyph when no logo is uploaded so the header still reads as the organization. */
+  logoFallback?: "initial" | "org-symbol";
 }) {
   if (branding.logo_url) {
     return <img className="tenant-logo" src={branding.logo_url} alt="" />;
+  }
+
+  if (logoFallback === "org-symbol") {
+    return (
+      <div className="tenant-logo-fallback tenant-logo-fallback--org-icon" aria-hidden="true">
+        <span className="material-symbols-outlined">storefront</span>
+      </div>
+    );
   }
 
   const initial = surveyTitle.trim().slice(0, 1).toUpperCase() || "G";
@@ -355,7 +366,7 @@ export function FeedbackFlow({
           </div>
         </div>
         <FeedbackHeader
-          logo={branding.logo_url ? null : <TenantLogoFeedback branding={branding} surveyTitle={surveyTitle} />}
+          logo={null}
           subtitle={locationName}
           title={surveyTitle}
         />
@@ -386,7 +397,13 @@ export function FeedbackFlow({
       })()
     ) : (
       <FeedbackHeader
-        logo={<TenantLogoFeedback branding={branding} surveyTitle={surveyTitle} />}
+        logo={
+          <TenantLogoFeedback
+            branding={branding}
+            logoFallback={templateSlug === "kiosk_touch" ? "org-symbol" : "initial"}
+            surveyTitle={surveyTitle}
+          />
+        }
         subtitle={locationName}
         title={surveyTitle}
       />

@@ -9,6 +9,7 @@ import "./styles/public-feedback.css";
 import "./styles/public-feedback-kiosk.css";
 import "./styles/public-feedback-heritage.css";
 import "./styles/public-feedback-jewelry-card.css";
+import "./styles/public-feedback-phone-portrait.css";
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>

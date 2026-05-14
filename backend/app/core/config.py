@@ -1,11 +1,12 @@
 import os
 import ssl
+import warnings
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -116,6 +117,20 @@ class Settings(BaseSettings):
                 "with no extra quotes; do not leave DATABASE_URL empty on Railway."
             ) from exc
         return out
+
+    @model_validator(mode="after")
+    def warn_public_feedback_base_url_when_deployed(self):
+        """QR PNG/SVG use ``public_feedback_base_url``; local defaults break real-world scans."""
+        if os.environ.get("RAILWAY_ENVIRONMENT"):
+            low = self.public_feedback_base_url.strip().lower()
+            if "127.0.0.1" in low or low.startswith("http://localhost"):
+                warnings.warn(
+                    "PUBLIC_FEEDBACK_BASE_URL still points to localhost — QR codes encode this URL. "
+                    "Set PUBLIC_FEEDBACK_BASE_URL to your deployed frontend HTTPS origin (where /f/… is served).",
+                    UserWarning,
+                    stacklevel=2,
+                )
+        return self
 
     @property
     def database_asyncpg_connect_args(self) -> dict[str, Any]:
