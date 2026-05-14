@@ -1,10 +1,17 @@
 import type { MeResponse, TokenResponse } from "../types/admin";
 
+import { resolvePublicEnvUrl } from "./runtimePublicEnv";
+
 const PLATFORM_ACCESS_TOKEN_KEY = "goliSoda.platform.accessToken";
 const PLATFORM_REFRESH_TOKEN_KEY = "goliSoda.platform.refreshToken";
 
-const PLATFORM_API_BASE_URL =
-  import.meta.env.VITE_PLATFORM_API_BASE_URL ?? "http://localhost:8003";
+function platformApiBase(): string {
+  return resolvePublicEnvUrl(
+    "VITE_PLATFORM_API_BASE_URL",
+    import.meta.env.VITE_PLATFORM_API_BASE_URL,
+    "http://localhost:8003",
+  );
+}
 
 type ApiValidationError = {
   loc?: Array<string | number>;
@@ -75,7 +82,7 @@ async function errorMessageFromResponse(response: Response): Promise<string> {
 }
 
 export async function platformLogin(email: string, password: string): Promise<TokenResponse> {
-  const response = await fetch(`${PLATFORM_API_BASE_URL}/auth/login`, {
+  const response = await fetch(`${platformApiBase()}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -87,7 +94,7 @@ export async function platformLogin(email: string, password: string): Promise<To
 }
 
 export async function platformFetchMe(token: string): Promise<MeResponse> {
-  const response = await fetch(`${PLATFORM_API_BASE_URL}/auth/me`, {
+  const response = await fetch(`${platformApiBase()}/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
@@ -97,7 +104,7 @@ export async function platformFetchMe(token: string): Promise<MeResponse> {
 }
 
 async function platformAuthFetch<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${PLATFORM_API_BASE_URL}${path}`, {
+  const response = await fetch(`${platformApiBase()}${path}`, {
     ...init,
     headers: {
       ...(init.body ? { "Content-Type": "application/json" } : {}),

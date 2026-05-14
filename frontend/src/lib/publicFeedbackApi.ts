@@ -1,9 +1,22 @@
 import type { PublicFeedbackContext, SubmitAnswer, SubmitResponse } from "../types/publicFeedback";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
-/** Public feedback SPA calls (split deploy: Railway URL of Public Feedback service). */
-const PUBLIC_FEEDBACK_API_BASE_URL =
-  import.meta.env.VITE_PUBLIC_FEEDBACK_API_URL ?? API_BASE_URL;
+import { resolvePublicEnvUrl } from "./runtimePublicEnv";
+
+function adminApiBase(): string {
+  return resolvePublicEnvUrl(
+    "VITE_API_BASE_URL",
+    import.meta.env.VITE_API_BASE_URL,
+    "http://localhost:8000",
+  );
+}
+
+function publicFeedbackApiBase(): string {
+  return resolvePublicEnvUrl(
+    "VITE_PUBLIC_FEEDBACK_API_URL",
+    import.meta.env.VITE_PUBLIC_FEEDBACK_API_URL,
+    adminApiBase,
+  );
+}
 
 export async function fetchPublicFeedbackContext(
   channelCode: string,
@@ -12,7 +25,7 @@ export async function fetchPublicFeedbackContext(
     throw new Error("This feedback link is missing its channel code.");
   }
 
-  const response = await fetch(`${PUBLIC_FEEDBACK_API_BASE_URL}/f/${encodeURIComponent(channelCode)}`);
+  const response = await fetch(`${publicFeedbackApiBase()}/f/${encodeURIComponent(channelCode)}`);
   if (!response.ok) {
     throw new Error("We could not load this feedback form.");
   }
@@ -24,7 +37,7 @@ export async function submitPublicFeedback(
   payload: { locale: string; answers: SubmitAnswer[]; metadata: Record<string, string> },
 ): Promise<SubmitResponse> {
   const response = await fetch(
-    `${PUBLIC_FEEDBACK_API_BASE_URL}/f/${encodeURIComponent(channelCode)}/submit`,
+    `${publicFeedbackApiBase()}/f/${encodeURIComponent(channelCode)}/submit`,
     {
       method: "POST",
       headers: {

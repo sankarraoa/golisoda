@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "node scripts/write-runtime-env.mjs && vite preview"
   },
   "dependencies": {
     "jspdf": "^4.2.1",

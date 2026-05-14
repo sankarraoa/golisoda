@@ -23,9 +23,24 @@ import type {
   TokenResponse,
 } from "../types/admin";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+import { resolvePublicEnvUrl } from "./runtimePublicEnv";
+
+function adminApiBase(): string {
+  return resolvePublicEnvUrl(
+    "VITE_API_BASE_URL",
+    import.meta.env.VITE_API_BASE_URL,
+    "http://localhost:8000",
+  );
+}
+
 /** Split deploy: base URL for Template Admin service (`/survey-templates`). Defaults to main API when monolithic.*/
-const TEMPLATE_API_BASE_URL = import.meta.env.VITE_TEMPLATE_API_BASE_URL ?? API_BASE_URL;
+function templateApiBase(): string {
+  return resolvePublicEnvUrl(
+    "VITE_TEMPLATE_API_BASE_URL",
+    import.meta.env.VITE_TEMPLATE_API_BASE_URL,
+    adminApiBase,
+  );
+}
 const ACCESS_TOKEN_KEY = "goliSoda.accessToken";
 const REFRESH_TOKEN_KEY = "goliSoda.refreshToken";
 
@@ -76,7 +91,7 @@ async function authenticatedFetch<T>(
   options: AuthenticatedFetchOptions = {},
 ): Promise<T> {
   const { baseUrl, headers, ...rest } = options;
-  const resolvedBase = baseUrl ?? API_BASE_URL;
+  const resolvedBase = baseUrl ?? adminApiBase();
 
   const response = await fetch(`${resolvedBase}${path}`, {
     ...rest,
@@ -104,11 +119,11 @@ export function channelQrDownloadUrl(
   channelId: string,
   format: "png" | "svg",
 ): string {
-  return `${API_BASE_URL}/tenants/${tenantId}/channels/${channelId}/qr.${format}`;
+  return `${adminApiBase()}/tenants/${tenantId}/channels/${channelId}/qr.${format}`;
 }
 
 export async function login(email: string, password: string): Promise<TokenResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  const response = await fetch(`${adminApiBase()}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -208,7 +223,7 @@ export async function fetchTenantDashboard(
       ? authenticatedFetch<SurveyVersion[]>(`/tenants/${tenantId}/surveys/versions`, token)
       : [],
     canTemplates
-      ? authenticatedFetch<SurveyTemplate[]>("/survey-templates", token, { baseUrl: TEMPLATE_API_BASE_URL })
+      ? authenticatedFetch<SurveyTemplate[]>("/survey-templates", token, { baseUrl: templateApiBase() })
       : Promise.resolve([]),
     can("channel:read") ? authenticatedFetch<Channel[]>(`/tenants/${tenantId}/channels`, token) : [],
     can("user:read") ? authenticatedFetch<TenantUser[]>(`/tenants/${tenantId}/users`, token) : [],
@@ -638,7 +653,7 @@ export async function uploadTenantBrandingLogoFile(
 ): Promise<TenantBranding> {
   const form = new FormData();
   form.append("file", file);
-  const response = await fetch(`${API_BASE_URL}/tenants/${tenantId}/branding/logo-file`, {
+  const response = await fetch(`${adminApiBase()}/tenants/${tenantId}/branding/logo-file`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: form,
