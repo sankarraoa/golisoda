@@ -89,6 +89,16 @@ The container may not put the `alembic` CLI on `PATH`. This repo uses
 `python -m alembic -c alembic.ini upgrade head` in **`backend/railway.toml`**
 (`preDeployCommand`), which uses the same Python environment as the app.
 
+**Alembic `upgrade head` fails during pre-deploy** (asyncpg / SSL / connection)
+
+Managed Postgres (including Railway’s plugin) usually **requires TLS**. The API
+normalizes `DATABASE_URL`: `postgres://` and `postgresql://` become
+`postgresql+asyncpg://`, `sslmode=require` (libpq) is mapped to **`ssl=true`** for
+asyncpg, and when **`RAILWAY_ENVIRONMENT`** is set an **`ssl=true`** default is applied
+if the URL does not already set `ssl`. Use the **`DATABASE_URL`** (or `POSTGRES_URL`)
+**reference variable** from your Postgres service. If you still see connection errors,
+confirm the variable is attached to the API service and matches the DB user/database.
+
 **No start command detected** (Railpack log ends with “Specify a start command”)
 
 Railpack looks for **`railpack.json`** in the **directory being built** (see

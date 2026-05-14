@@ -1,6 +1,7 @@
 import os
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -52,10 +53,44 @@ class Settings(BaseSettings):
 
     @field_validator("database_url", mode="before")
     @classmethod
-    def normalize_database_url(cls, value: str) -> str:
-        if value.startswith("postgresql://"):
-            return value.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return value
+    def normalize_database_url(cls, value: object) -> str:
+        """
+        - Railway and other hosts often supply `postgres://` or `postgresql://` (sync URL).
+          SQLAlchemy async needs `postgresql+asyncpg://`.
+        - libpq-style `sslmode=require` is ignored by asyncpg unless translated to `ssl=…`
+          query params (otherwise migrations / API fail to connect).
+        - When running on Railway (`RAILWAY_ENVIRONMENT`), default to SSL if the URL
+          does not already opt out (matches managed Postgres expectations).
+        """
+        if not isinstance(value, str):
+            return value  # type: ignore[return-value]
+
+        url = value.strip()
+        if url.startswith("postgres://"):
+            url = "postgresql+asyncpg://" + url[len("postgres://") :]
+        elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
+            url = "postgresql+asyncpg://" + url[len("postgresql://") :]
+
+        parts = urlsplit(url)
+        q = dict(parse_qsl(parts.query, keep_blank_values=True))
+
+        sslmode = q.pop("sslmode", None)
+        if isinstance(sslmode, str) and sslmode:
+            sm = sslmode.lower()
+            if sm in ("require", "verify-ca", "verify-full"):
+                q.setdefault("ssl", "true")
+            elif sm == "disable":
+                q.setdefault("ssl", "false")
+
+        if (
+            os.environ.get("RAILWAY_ENVIRONMENT")
+            and "ssl" not in q
+            and (sslmode is None or (isinstance(sslmode, str) and sslmode.lower() == "prefer"))
+        ):
+            q.setdefault("ssl", "true")
+
+        new_query = urlencode(list(q.items()))
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
 
     @property
     def admin_cors_origin_list(self) -> list[str]:
