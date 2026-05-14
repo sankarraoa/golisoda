@@ -1,4 +1,5 @@
 import os
+import ssl
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,21 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 _DEFAULT_DATABASE_URL = (
     "postgresql+asyncpg://goli_soda:goli_soda_dev_password@localhost:5432/goli_soda"
 )
+
+
+def _asyncpg_ssl_context_no_verify() -> ssl.SSLContext:
+    """
+    Encrypts the connection without validating the server certificate.
+
+    Railway managed Postgres commonly terminates TLS with a chain that fails
+    `ssl=True` default verification; this matches typical `sslmode=require` behavior
+    (encryption without full CA validation).
+    """
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 
 class Settings(BaseSettings):
@@ -65,9 +81,8 @@ class Settings(BaseSettings):
           `postgresql+asyncpg://`.
         - **Do not leave `sslmode` or `ssl` in the query string.** SQLAlchemy forwards URL
           query keys as keyword arguments to `asyncpg.connect()`, which does **not** accept
-          `sslmode` (`TypeError: unexpected keyword argument 'sslmode'`). TLS for managed
-          Postgres is applied via **`connect_args={"ssl": True}`** (see
-          `database_asyncpg_connect_args`).
+          `sslmode` (`TypeError: unexpected keyword argument 'sslmode'`). TLS is configured
+          via **`connect_args`** (see `database_asyncpg_connect_args`), not URL query flags.
         """
         if not isinstance(value, str):
             return value  # type: ignore[return-value]
@@ -106,8 +121,12 @@ class Settings(BaseSettings):
     def database_asyncpg_connect_args(self) -> dict[str, Any]:
         """
         asyncpg expects TLS via the `ssl` argument to connect(), not `sslmode=` in the URL.
+
         Optional env: `DATABASE_SSL=true|false` to force TLS on or off; when unset, TLS is
-        enabled for non-localhost URLs when `RAILWAY_ENVIRONMENT` is set.
+        used for non-localhost URLs when `RAILWAY_ENVIRONMENT` is set. We pass an
+        `ssl.SSLContext` with verification disabled so Railway's Postgres endpoint can
+        negotiate TLS without certificate verification failures (`ssl=True` alone enforces
+        full verification).
         """
         raw = os.environ.get("DATABASE_SSL")
         if raw is not None:
@@ -115,13 +134,13 @@ class Settings(BaseSettings):
             if r in ("0", "false", "no"):
                 return {}
             if r in ("1", "true", "yes"):
-                return {"ssl": True}
+                return {"ssl": _asyncpg_ssl_context_no_verify()}
 
         parts = urlsplit(self.database_url)
         host = (parts.hostname or "").lower()
         is_local = not host or host in ("localhost", "127.0.0.1", "::1")
         if os.environ.get("RAILWAY_ENVIRONMENT") and not is_local:
-            return {"ssl": True}
+            return {"ssl": _asyncpg_ssl_context_no_verify()}
         return {}
 
     @property

@@ -113,8 +113,9 @@ The container may not put the `alembic` CLI on `PATH`. This repo uses
 Managed Postgres (including Railway’s plugin) usually **requires TLS**. The app
 **strips `sslmode` / `ssl` from `DATABASE_URL`**: SQLAlchemy would otherwise pass them
 into `asyncpg.connect()`, which does not accept **`sslmode`** as a keyword (you would
-see `TypeError: unexpected keyword argument 'sslmode'`). TLS is enabled instead via
-**`connect_args={"ssl": True}`** when **`RAILWAY_ENVIRONMENT`** is set and the host is
+see `TypeError: unexpected keyword argument 'sslmode'`). TLS uses **`connect_args`**
+with an **`ssl.SSLContext`** (verification disabled for Railway’s endpoint; **`ssl=True`**
+alone can fail cert checks). Apply when **`RAILWAY_ENVIRONMENT`** is set and the host is
 not localhost. Override with **`DATABASE_SSL=true|false`** if needed.
 
 Use the **`DATABASE_URL`** reference from your Postgres service (`${{ Postgres.DATABASE_URL }}`
