@@ -93,11 +93,12 @@ The container may not put the `alembic` CLI on `PATH`. This repo uses
 
 Managed Postgres (including Railway’s plugin) usually **requires TLS**. The API
 normalizes `DATABASE_URL`: `postgres://` and `postgresql://` become
-`postgresql+asyncpg://`, `sslmode=require` (libpq) is mapped to **`ssl=true`** for
-asyncpg, and when **`RAILWAY_ENVIRONMENT`** is set an **`ssl=true`** default is applied
-if the URL does not already set `ssl`. Use the **`DATABASE_URL`** (or `POSTGRES_URL`)
-**reference variable** from your Postgres service. If you still see connection errors,
-confirm the variable is attached to the API service and matches the DB user/database.
+`postgresql+asyncpg://`, stray **`ssl=true`** query params (invalid for asyncpg) are
+mapped to **`sslmode=require`**, and when **`RAILWAY_ENVIRONMENT`** is set a default
+**`sslmode=require`** is applied for non-localhost URLs if `sslmode` is absent.
+Use the **`DATABASE_URL`** reference variable from your Postgres service (`${{ Postgres.DATABASE_URL }}`
+or the equivalent). If **`DATABASE_URL` is unset**, the app keeps its localhost dev
+default and pre-deploy Alembic cannot reach the database.
 
 **No start command detected** (Railpack log ends with “Specify a start command”)
 

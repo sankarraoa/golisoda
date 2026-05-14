@@ -8,6 +8,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
+_ASYNCPG_SSLMODES = frozenset(
+    {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
+)
+
 
 class Settings(BaseSettings):
     app_name: str = "Goli Soda Feedback API"
@@ -57,10 +61,11 @@ class Settings(BaseSettings):
         """
         - Railway and other hosts often supply `postgres://` or `postgresql://` (sync URL).
           SQLAlchemy async needs `postgresql+asyncpg://`.
-        - libpq-style `sslmode=require` is ignored by asyncpg unless translated to `ssl=…`
-          query params (otherwise migrations / API fail to connect).
-        - When running on Railway (`RAILWAY_ENVIRONMENT`), default to SSL if the URL
-          does not already opt out (matches managed Postgres expectations).
+        - asyncpg reads **`sslmode`** (`disable`, `allow`, `prefer`, `require`, …). Do **not**
+          put `ssl=true` in the query string: asyncpg treats that as `sslmode=true`, which is
+          invalid and raises `ClientConfigurationError`.
+        - On Railway (`RAILWAY_ENVIRONMENT`), default **`sslmode=require`** for non-local hosts
+          when the URL does not already set `sslmode`.
         """
         if not isinstance(value, str):
             return value  # type: ignore[return-value]
@@ -74,20 +79,29 @@ class Settings(BaseSettings):
         parts = urlsplit(url)
         q = dict(parse_qsl(parts.query, keep_blank_values=True))
 
-        sslmode = q.pop("sslmode", None)
-        if isinstance(sslmode, str) and sslmode:
-            sm = sslmode.lower()
-            if sm in ("require", "verify-ca", "verify-full"):
-                q.setdefault("ssl", "true")
-            elif sm == "disable":
-                q.setdefault("ssl", "false")
+        # `ssl=` is not a valid asyncpg DSN knob; map booleans to sslmode.
+        ssl_flag = q.pop("ssl", None)
+        if isinstance(ssl_flag, str) and ssl_flag.lower() in ("1", "true", "yes"):
+            q.setdefault("sslmode", "require")
+        elif isinstance(ssl_flag, str) and ssl_flag.lower() in ("0", "false", "no"):
+            q.setdefault("sslmode", "disable")
 
+        smode = q.get("sslmode")
+        if isinstance(smode, str) and smode:
+            normalized = smode.lower().strip()
+            if normalized in _ASYNCPG_SSLMODES:
+                q["sslmode"] = normalized
+            else:
+                q.pop("sslmode", None)
+
+        host = (parts.hostname or "").lower()
+        is_local = host in ("localhost", "127.0.0.1", "::1")
         if (
             os.environ.get("RAILWAY_ENVIRONMENT")
-            and "ssl" not in q
-            and (sslmode is None or (isinstance(sslmode, str) and sslmode.lower() == "prefer"))
+            and not is_local
+            and "sslmode" not in q
         ):
-            q.setdefault("ssl", "true")
+            q.setdefault("sslmode", "require")
 
         new_query = urlencode(list(q.items()))
         return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
