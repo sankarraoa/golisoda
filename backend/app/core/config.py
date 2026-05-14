@@ -1,15 +1,17 @@
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
-_ASYNCPG_SSLMODES = frozenset(
-    {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
+_DEFAULT_DATABASE_URL = (
+    "postgresql+asyncpg://goli_soda:goli_soda_dev_password@localhost:5432/goli_soda"
 )
 
 
@@ -23,7 +25,7 @@ class Settings(BaseSettings):
     environment: str = "local"
     log_level: str = "INFO"
 
-    database_url: str = "postgresql+asyncpg://goli_soda:goli_soda_dev_password@localhost:5432/goli_soda"
+    database_url: str = _DEFAULT_DATABASE_URL
     redis_url: str = "redis://localhost:6379/0"
 
     jwt_issuer: str = "goli-soda"
@@ -59,18 +61,22 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_database_url(cls, value: object) -> str:
         """
-        - Railway and other hosts often supply `postgres://` or `postgresql://` (sync URL).
-          SQLAlchemy async needs `postgresql+asyncpg://`.
-        - asyncpg reads **`sslmode`** (`disable`, `allow`, `prefer`, `require`, …). Do **not**
-          put `ssl=true` in the query string: asyncpg treats that as `sslmode=true`, which is
-          invalid and raises `ClientConfigurationError`.
-        - On Railway (`RAILWAY_ENVIRONMENT`), default **`sslmode=require`** for non-local hosts
-          when the URL does not already set `sslmode`.
+        - Railway often supplies `postgres://` or `postgresql://`; SQLAlchemy async needs
+          `postgresql+asyncpg://`.
+        - **Do not leave `sslmode` or `ssl` in the query string.** SQLAlchemy forwards URL
+          query keys as keyword arguments to `asyncpg.connect()`, which does **not** accept
+          `sslmode` (`TypeError: unexpected keyword argument 'sslmode'`). TLS for managed
+          Postgres is applied via **`connect_args={"ssl": True}`** (see
+          `database_asyncpg_connect_args`).
         """
         if not isinstance(value, str):
             return value  # type: ignore[return-value]
 
-        url = value.strip()
+        url = value.strip().strip('"').strip("'")
+        if not url:
+            # Empty DATABASE_URL in env would otherwise become "?sslmode=require" under Railway.
+            return _DEFAULT_DATABASE_URL
+
         if url.startswith("postgres://"):
             url = "postgresql+asyncpg://" + url[len("postgres://") :]
         elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
@@ -79,32 +85,44 @@ class Settings(BaseSettings):
         parts = urlsplit(url)
         q = dict(parse_qsl(parts.query, keep_blank_values=True))
 
-        # `ssl=` is not a valid asyncpg DSN knob; map booleans to sslmode.
-        ssl_flag = q.pop("ssl", None)
-        if isinstance(ssl_flag, str) and ssl_flag.lower() in ("1", "true", "yes"):
-            q.setdefault("sslmode", "require")
-        elif isinstance(ssl_flag, str) and ssl_flag.lower() in ("0", "false", "no"):
-            q.setdefault("sslmode", "disable")
-
-        smode = q.get("sslmode")
-        if isinstance(smode, str) and smode:
-            normalized = smode.lower().strip()
-            if normalized in _ASYNCPG_SSLMODES:
-                q["sslmode"] = normalized
-            else:
-                q.pop("sslmode", None)
-
-        host = (parts.hostname or "").lower()
-        is_local = host in ("localhost", "127.0.0.1", "::1")
-        if (
-            os.environ.get("RAILWAY_ENVIRONMENT")
-            and not is_local
-            and "sslmode" not in q
-        ):
-            q.setdefault("sslmode", "require")
+        # Strip TLS query keys so SQLAlchemy does not pass them into asyncpg.connect(); TLS is set
+        # in create_async_engine(..., connect_args=...) instead.
+        q.pop("sslmode", None)
+        q.pop("ssl", None)
 
         new_query = urlencode(list(q.items()))
-        return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+        out = urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+        try:
+            make_url(out)
+        except Exception as exc:  # noqa: BLE001 — surface URL problems early
+            raise ValueError(
+                "DATABASE_URL is not a valid SQLAlchemy URL after normalization. "
+                "Use the Postgres plugin reference (e.g. ${{ Postgres.DATABASE_URL }}) "
+                "with no extra quotes; do not leave DATABASE_URL empty on Railway."
+            ) from exc
+        return out
+
+    @property
+    def database_asyncpg_connect_args(self) -> dict[str, Any]:
+        """
+        asyncpg expects TLS via the `ssl` argument to connect(), not `sslmode=` in the URL.
+        Optional env: `DATABASE_SSL=true|false` to force TLS on or off; when unset, TLS is
+        enabled for non-localhost URLs when `RAILWAY_ENVIRONMENT` is set.
+        """
+        raw = os.environ.get("DATABASE_SSL")
+        if raw is not None:
+            r = raw.strip().lower()
+            if r in ("0", "false", "no"):
+                return {}
+            if r in ("1", "true", "yes"):
+                return {"ssl": True}
+
+        parts = urlsplit(self.database_url)
+        host = (parts.hostname or "").lower()
+        is_local = not host or host in ("localhost", "127.0.0.1", "::1")
+        if os.environ.get("RAILWAY_ENVIRONMENT") and not is_local:
+            return {"ssl": True}
+        return {}
 
     @property
     def admin_cors_origin_list(self) -> list[str]:

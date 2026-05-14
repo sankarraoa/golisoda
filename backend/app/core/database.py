@@ -23,6 +23,7 @@ def get_engine() -> AsyncEngine:
         settings = get_settings()
         _engine = create_async_engine(
             settings.database_url,
+            connect_args=settings.database_asyncpg_connect_args,
             pool_pre_ping=True,
             pool_size=5,
             max_overflow=5,

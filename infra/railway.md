@@ -17,11 +17,29 @@ Railway's monorepo docs recommend setting a service root directory for isolated
 projects, and config files in a monorepo must be referenced by absolute repo path
 such as `/backend/railway.toml`.
 
+## Add PostgreSQL (so `DATABASE_URL` resolves)
+
+If the API has `DATABASE_URL=${{ Postgres.DATABASE_URL }}` (or similar) but **no
+PostgreSQL service** exists in the project, the reference resolves to an **empty
+string**, Alembic pre-deploy fails, and SQLAlchemy cannot parse the URL.
+
+1. In the Railway project: **New** → **Database** → **PostgreSQL** (add one instance).
+2. The reference syntax is **`${{ <ServiceName>.DATABASE_URL }}`**, where **`ServiceName`**
+   matches the Postgres service **name on the canvas** (e.g. `Postgres` by default).
+   If you rename the database service, **update the variable reference** to match.
+3. Open your **API** service → **Variables** → set `DATABASE_URL` using **Variable Reference**
+   to that database’s `DATABASE_URL` (the UI picker avoids typos).
+4. Redeploy the API (pre-deploy migrations need a non-empty URL).
+
+Add **Redis** the same way (`New` → **Database** → **Redis**) and point `REDIS_URL`
+at **`${{ <RedisServiceName>.REDIS_URL }}`** (or the URL field your Redis plugin exposes).
+
 ## API Variables
 
 Set these on the API service:
 
 - `DATABASE_URL`
+- `DATABASE_SSL` (optional; `true`/`false` — overrides automatic TLS for asyncpg)
 - `REDIS_URL`
 - `SERVICE_NAME=api`
 - `JWT_ISSUER`
@@ -35,8 +53,9 @@ Set these on the API service:
 - `LOG_LEVEL=INFO`
 
 Use Railway reference variables for `DATABASE_URL` and `REDIS_URL` from the
-PostgreSQL and Redis services. The API config normalizes Railway's
-`postgresql://...` URL to SQLAlchemy's async driver URL automatically.
+PostgreSQL and Redis services. The API turns `postgres://` / `postgresql://` into
+`postgresql+asyncpg://` and strips `sslmode` from the URL (TLS uses `connect_args`;
+see troubleshooting if you hit asyncpg SSL errors).
 
 ## Frontend Variables
 
@@ -91,14 +110,18 @@ The container may not put the `alembic` CLI on `PATH`. This repo uses
 
 **Alembic `upgrade head` fails during pre-deploy** (asyncpg / SSL / connection)
 
-Managed Postgres (including Railway’s plugin) usually **requires TLS**. The API
-normalizes `DATABASE_URL`: `postgres://` and `postgresql://` become
-`postgresql+asyncpg://`, stray **`ssl=true`** query params (invalid for asyncpg) are
-mapped to **`sslmode=require`**, and when **`RAILWAY_ENVIRONMENT`** is set a default
-**`sslmode=require`** is applied for non-localhost URLs if `sslmode` is absent.
-Use the **`DATABASE_URL`** reference variable from your Postgres service (`${{ Postgres.DATABASE_URL }}`
-or the equivalent). If **`DATABASE_URL` is unset**, the app keeps its localhost dev
-default and pre-deploy Alembic cannot reach the database.
+Managed Postgres (including Railway’s plugin) usually **requires TLS**. The app
+**strips `sslmode` / `ssl` from `DATABASE_URL`**: SQLAlchemy would otherwise pass them
+into `asyncpg.connect()`, which does not accept **`sslmode`** as a keyword (you would
+see `TypeError: unexpected keyword argument 'sslmode'`). TLS is enabled instead via
+**`connect_args={"ssl": True}`** when **`RAILWAY_ENVIRONMENT`** is set and the host is
+not localhost. Override with **`DATABASE_SSL=true|false`** if needed.
+
+Use the **`DATABASE_URL`** reference from your Postgres service (`${{ Postgres.DATABASE_URL }}`
+or the equivalent). If **`DATABASE_URL` is missing, empty, or only whitespace**, the app falls back
+to the bundled **localhost** dev URL and pre-deploy Alembic cannot reach Railway Postgres.
+Do not wrap the reference in extra quotes. **`Could not parse SQLAlchemy URL`** often meant an
+empty `DATABASE_URL`; the normalizer validates the URL and fails with a clearer message.
 
 **No start command detected** (Railpack log ends with “Specify a start command”)
 
