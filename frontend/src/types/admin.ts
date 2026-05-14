@@ -271,7 +271,7 @@ export type VersionCohortAggregate = {
 };
 
 export type ResponseAggregateReport = {
-  channel_id: string;
+  channel_id: string | null;
   channel_name: string;
   submitted_after: string | null;
   submitted_before: string | null;

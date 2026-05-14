@@ -2891,6 +2891,56 @@ tbody tr:hover .row-actions {
   font-size: var(--text-sm);
 }
 
+.dashboard-reports-section .chart-card-header {
+  align-items: flex-start;
+}
+
+.dashboard-reports-hint {
+  flex: 1;
+  font-size: var(--text-sm);
+  margin-left: auto;
+}
+
+.dashboard-report-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 20px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-report-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-report-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dashboard-report-grid .analytics-report-head {
+  padding: 14px 16px;
+  gap: 10px;
+}
+
+.dashboard-report-grid .analytics-report-q-title {
+  font-size: var(--text-md);
+}
+
+.dashboard-report-grid .analytics-report-muted {
+  font-size: var(--text-xs);
+}
+
+.dashboard-report-grid .analytics-report-body {
+  padding: 14px 16px 18px;
+}
+
+.dashboard-reports-unavailable {
+  padding: 4px 0;
+}
+
 .analytics-question-feed {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

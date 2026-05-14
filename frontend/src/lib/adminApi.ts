@@ -264,14 +264,16 @@ export async function fetchResponseAggregateReport(
   token: string,
   tenantId: string,
   params: {
-    channel_id: string;
+    channel_id?: string;
     survey_version_id?: string;
     submitted_after?: string;
     submitted_before?: string;
   },
 ): Promise<ResponseAggregateReport> {
   const search = new URLSearchParams();
-  search.set("channel_id", params.channel_id);
+  if (params.channel_id) {
+    search.set("channel_id", params.channel_id);
+  }
   if (params.survey_version_id) {
     search.set("survey_version_id", params.survey_version_id);
   }
@@ -281,8 +283,9 @@ export async function fetchResponseAggregateReport(
   if (params.submitted_before) {
     search.set("submitted_before", params.submitted_before);
   }
+  const q = search.toString();
   return authenticatedFetch<ResponseAggregateReport>(
-    `/tenants/${tenantId}/responses/aggregate?${search.toString()}`,
+    `/tenants/${tenantId}/responses/aggregate${q ? `?${q}` : ""}`,
     token,
   );
 }
@@ -291,14 +294,18 @@ export async function fetchNpsAnalyticsDashboard(
   token: string,
   tenantId: string,
   params: {
-    channel_id: string;
-    survey_version_id: string;
+    channel_id?: string;
+    survey_version_id?: string;
     question_key: string;
   },
 ): Promise<NpsDashboardPayload> {
   const search = new URLSearchParams();
-  search.set("channel_id", params.channel_id);
-  search.set("survey_version_id", params.survey_version_id);
+  if (params.channel_id) {
+    search.set("channel_id", params.channel_id);
+  }
+  if (params.survey_version_id) {
+    search.set("survey_version_id", params.survey_version_id);
+  }
   search.set("question_key", params.question_key);
   return authenticatedFetch<NpsDashboardPayload>(
     `/tenants/${tenantId}/analytics/nps-dashboard?${search.toString()}`,
@@ -310,14 +317,18 @@ export async function fetchCsat2AnalyticsDashboard(
   token: string,
   tenantId: string,
   params: {
-    channel_id: string;
-    survey_version_id: string;
+    channel_id?: string;
+    survey_version_id?: string;
     question_key: string;
   },
 ): Promise<Csat2DashboardPayload> {
   const search = new URLSearchParams();
-  search.set("channel_id", params.channel_id);
-  search.set("survey_version_id", params.survey_version_id);
+  if (params.channel_id) {
+    search.set("channel_id", params.channel_id);
+  }
+  if (params.survey_version_id) {
+    search.set("survey_version_id", params.survey_version_id);
+  }
   search.set("question_key", params.question_key);
   return authenticatedFetch<Csat2DashboardPayload>(
     `/tenants/${tenantId}/analytics/csat2-dashboard?${search.toString()}`,

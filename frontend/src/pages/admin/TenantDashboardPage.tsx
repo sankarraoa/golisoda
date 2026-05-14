@@ -62,6 +62,7 @@ import { mapTenantProfileToPublicOrganization } from "../../types/publicFeedback
 import { OrganizationSwitcherModal } from "../../components/OrganizationSwitcherModal";
 import { INDIAN_CITIES, INDIAN_STATES } from "../../data/indianRegions";
 import { AnalyticsDashboard } from "./analytics/AnalyticsDashboard";
+import { DashboardReportsGrid } from "./dashboard/DashboardReportsGrid";
 import { ResponsesExplorer } from "./ResponsesExplorer";
 import {
   TENANT_SIDEBAR_STORAGE_KEY,
@@ -2418,8 +2419,8 @@ function buildQuestionOptions(
 function DashboardContent({
   dashboardData,
   me,
-  onOpenSurveyBuilder,
-  onUpdated,
+  onOpenSurveyBuilder: _onOpenSurveyBuilder,
+  onUpdated: _onUpdated,
 }: {
   dashboardData: DashboardData;
   me?: MeResponse | null;
@@ -2438,37 +2439,14 @@ function DashboardContent({
         <StatCard label="Active channels" value={activeChannels.length} />
       </div>
 
-      <section className="chart-card">
+      <section className="chart-card dashboard-reports-section">
         <div className="chart-card-header">
-          <h2 className="chart-card-title">Recent Feedback Channels</h2>
-          <StatusBadge
-            className={tenantStatusClass(dashboardData.tenant.status)}
-            label={dashboardData.tenant.status}
-          />
+          <h2 className="chart-card-title">Survey insights</h2>
+          <span className="muted dashboard-reports-hint">
+            Tenant-wide rollups · tiles appear when that question type has responses.
+          </span>
         </div>
-        <ChannelTable
-          channels={dashboardData.channels}
-          dashboardData={dashboardData}
-          limit={5}
-          me={me}
-          onUpdated={onUpdated}
-          tenantId={dashboardData.tenant.id}
-        />
-      </section>
-
-      <section className="chart-card">
-        <div className="chart-card-header">
-          <h2 className="chart-card-title">Surveys</h2>
-        </div>
-        <SurveyTable
-          surveys={dashboardData.surveys}
-          surveyVersions={dashboardData.surveyVersions}
-          limit={5}
-          me={me}
-          onOpenSurveyBuilder={onOpenSurveyBuilder}
-          onUpdated={onUpdated}
-          tenantId={dashboardData.tenant.id}
-        />
+        <DashboardReportsGrid tenantId={dashboardData.tenant.id} me={me ?? null} />
       </section>
     </div>
   );
