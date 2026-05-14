@@ -1,3 +1,6 @@
 {
-  "$schema": "https://schema.railpack.com"
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "startCommand": "npm run preview"
+  }
 }

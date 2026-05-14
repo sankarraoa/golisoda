@@ -8,9 +8,10 @@ same GitHub repository:
   start command), and **`backend/requirements.txt`** (`-e .` so Railpack installs
   from `pyproject.toml` after the full tree is present; avoid early `pip install .`)
 - Frontend web service, root directory `frontend`, config files `frontend/railway.toml`
-  and **`frontend/railpack.json`** (schema only — **no** `deploy.startCommand` so Railpack
-  serves the Vite **`dist/`** build with **Caddy**. Using **`vite preview`** breaks Railway
-  healthchecks because Vite rejects the `healthcheck.railway.app` hostname.)
+  and **`frontend/railpack.json`** (`deploy.startCommand`: **`npm run preview`**). **`vite.config.ts`**
+  sets **`preview.allowedHosts: true`** and **`preview.host` / `preview.port`** from **`PORT`**
+  so Railway healthchecks (`healthcheck.railway.app`) succeed. Omitting a start command can leave
+  nothing listening → edge **“Application failed to respond.”**
 - Worker service, root directory `backend`, start command `python -m app.cli.run_feedback_worker`
 - PostgreSQL database service
 - Redis database service
@@ -126,13 +127,15 @@ to the bundled **localhost** dev URL and pre-deploy Alembic cannot reach Railway
 Do not wrap the reference in extra quotes. **`Could not parse SQLAlchemy URL`** often meant an
 empty `DATABASE_URL`; the normalizer validates the URL and fails with a clearer message.
 
-**Frontend deploy: healthcheck on `/` stays “service unavailable”**
+**Frontend deploy: healthcheck fails or browser shows “Application failed to respond”**
 
-If **`npm run preview`** (Vite) is the **start command**, Railway’s probe uses **`Host:
-healthcheck.railway.app`**, which **Vite rejects**, so healthchecks fail forever. This repo’s
-**`frontend/railway.toml`** omits **`startCommand`** so **Railpack serves `dist/` with Caddy**.
-Remove any **`deploy.startCommand`** from **`frontend/railpack.json`** and clear a **Custom Start
-Command** override on the frontend service if you added one.
+- **Wrong target port:** In **Networking**, set **Target port** to the same port Vite prints at
+  startup (usually **`$PORT`** from Railway — often **8080**, not **8000**).
+- **`vite preview` + healthcheck host:** Without **`preview.allowedHosts`** in **`vite.config.ts`**,
+  Vite can return **503** for **`Host: healthcheck.railway.app`**. This repo enables
+  **`preview.allowedHosts: true`** and binds **`0.0.0.0`**.
+- **No start command:** If **`railpack.json` / `railway.toml`** omit **`npm run preview`**, Railpack
+  may not serve the SPA on a port Railway routes to — restore the documented start command.
 
 **No start command detected** (Railpack log ends with “Specify a start command”)
 
