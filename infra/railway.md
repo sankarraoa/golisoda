@@ -4,8 +4,9 @@ This repo is a monorepo. Deploy it to Railway as separate services that point at
 same GitHub repository:
 
 - API web service, root directory `backend`, config files `backend/railway.toml`
-  (deploy: Alembic + healthcheck) and **`backend/railpack.json`** (Railpack: Python
-  3.12, `pip install .` for `pyproject.toml`, `deploy.startCommand` for uvicorn)
+  (deploy: Alembic + healthcheck), **`backend/railpack.json`** (Python 3.12 + uvicorn
+  start command), and **`backend/requirements.txt`** (`-e .` so Railpack installs
+  from `pyproject.toml` after the full tree is present; avoid early `pip install .`)
 - Frontend web service, root directory `frontend`, config files `frontend/railway.toml`
   and **`frontend/railpack.json`** (explicit preview start command for Railpack)
 - Worker service, root directory `backend`, start command `python -m app.cli.run_feedback_worker`
@@ -73,12 +74,14 @@ worker is running.
 
 ## Troubleshooting (Railway diagnosis)
 
-**`alembic` missing / dependencies not installed** (pre-deploy or runtime)
+**`alembic` missing / “Directory '.' is not installable”** (build)
 
-Railpack’s default **pip** path expects **`requirements.txt`**. This app is installed from
-**`pyproject.toml`** via setuptools, so **`backend/railpack.json`** extends the install
-step with `pip install .` (see `steps.install.commands`) and pins **`packages.python`**
-to **3.12** to match `requires-python`.
+A custom Railpack step that runs **`pip install .` too early** can execute before the
+project tree is present in the step’s working directory. Use **`backend/requirements.txt`**
+with a single line **`-e .`** so Railpack’s normal **`pip install -r requirements.txt`**
+runs against the full **service root** (with `pyproject.toml`). **`backend/railpack.json`**
+only sets **`packages.python`** and **`deploy.startCommand`** (no `steps.install`
+override).
 
 **`alembic: command not found`** (during pre-deploy)
 

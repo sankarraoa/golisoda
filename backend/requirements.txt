@@ -1,0 +1,3 @@
+# Used by Railpack / Docker when only requirements.txt triggers `pip install -r`.
+# Installs [project] from pyproject.toml (deps + goli-soda-backend package / app/).
+-e .
