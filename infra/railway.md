@@ -8,7 +8,9 @@ same GitHub repository:
   start command), and **`backend/requirements.txt`** (`-e .` so Railpack installs
   from `pyproject.toml` after the full tree is present; avoid early `pip install .`)
 - Frontend web service, root directory `frontend`, config files `frontend/railway.toml`
-  and **`frontend/railpack.json`** (explicit preview start command for Railpack)
+  and **`frontend/railpack.json`** (schema only — **no** `deploy.startCommand` so Railpack
+  serves the Vite **`dist/`** build with **Caddy**. Using **`vite preview`** breaks Railway
+  healthchecks because Vite rejects the `healthcheck.railway.app` hostname.)
 - Worker service, root directory `backend`, start command `python -m app.cli.run_feedback_worker`
 - PostgreSQL database service
 - Redis database service
@@ -123,6 +125,14 @@ or the equivalent). If **`DATABASE_URL` is missing, empty, or only whitespace**,
 to the bundled **localhost** dev URL and pre-deploy Alembic cannot reach Railway Postgres.
 Do not wrap the reference in extra quotes. **`Could not parse SQLAlchemy URL`** often meant an
 empty `DATABASE_URL`; the normalizer validates the URL and fails with a clearer message.
+
+**Frontend deploy: healthcheck on `/` stays “service unavailable”**
+
+If **`npm run preview`** (Vite) is the **start command**, Railway’s probe uses **`Host:
+healthcheck.railway.app`**, which **Vite rejects**, so healthchecks fail forever. This repo’s
+**`frontend/railway.toml`** omits **`startCommand`** so **Railpack serves `dist/` with Caddy**.
+Remove any **`deploy.startCommand`** from **`frontend/railpack.json`** and clear a **Custom Start
+Command** override on the frontend service if you added one.
 
 **No start command detected** (Railpack log ends with “Specify a start command”)
 

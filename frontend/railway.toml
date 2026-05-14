@@ -3,7 +3,8 @@ builder = "RAILPACK"
 buildCommand = "npm run build"
 
 [deploy]
-startCommand = "npm run preview -- --host 0.0.0.0 --port $PORT"
+# No custom startCommand: Railpack serves `dist/` with Caddy. `vite preview` rejects
+# Railway's healthcheck host (`healthcheck.railway.app`), causing deploy failures.
 healthcheckPath = "/"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

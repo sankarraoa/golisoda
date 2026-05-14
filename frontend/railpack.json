@@ -1,6 +1,3 @@
 {
-  "$schema": "https://schema.railpack.com",
-  "deploy": {
-    "startCommand": "npm run preview -- --host 0.0.0.0 --port $PORT"
-  }
+  "$schema": "https://schema.railpack.com"
 }
