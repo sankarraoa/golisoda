@@ -278,6 +278,60 @@ export type ResponseAggregateReport = {
   cohorts: VersionCohortAggregate[];
 };
 
+export type NpsSnapshotBlock = {
+  response_count: number;
+  promoters_pct: number;
+  passives_pct: number;
+  detractors_pct: number;
+  nps: number | null;
+};
+
+export type NpsTrendMonth = {
+  year: number;
+  month: number;
+  label: string;
+  response_count: number;
+  promoters_pct: number;
+  passives_pct: number;
+  detractors_pct: number;
+  nps: number | null;
+};
+
+export type NpsDashboardPayload = {
+  question_key: string;
+  prompt: string;
+  reporting_period_label: string;
+  snapshot: NpsSnapshotBlock;
+  nps_delta_vs_period_start: number | null;
+  months: NpsTrendMonth[];
+};
+
+export type Csat2SnapshotBlock = {
+  yes_count: number;
+  no_count: number;
+  answered_count: number;
+  cohort_response_count: number;
+  csat_pct: number | null;
+  response_rate_pct: number;
+};
+
+export type Csat2TrendMonth = {
+  year: number;
+  month: number;
+  label: string;
+  response_count: number;
+  yes_count: number;
+  csat_pct: number | null;
+};
+
+export type Csat2DashboardPayload = {
+  question_key: string;
+  prompt: string;
+  reporting_period_label: string;
+  snapshot: Csat2SnapshotBlock;
+  months: Csat2TrendMonth[];
+};
+
 export type AnalyticsSummary = {
   total_responses: number;
   nps_average: number | null;

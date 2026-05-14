@@ -87,6 +87,60 @@ class ResponseAggregateReport(BaseModel):
     cohorts: list[VersionCohortAggregateRead]
 
 
+class NpsSnapshotBlock(BaseModel):
+    response_count: int
+    promoters_pct: float
+    passives_pct: float
+    detractors_pct: float
+    nps: int | None
+
+
+class NpsTrendMonth(BaseModel):
+    year: int
+    month: int
+    label: str
+    response_count: int
+    promoters_pct: float
+    passives_pct: float
+    detractors_pct: float
+    nps: int | None
+
+
+class NpsDashboardResponse(BaseModel):
+    question_key: str
+    prompt: str
+    reporting_period_label: str
+    snapshot: NpsSnapshotBlock
+    nps_delta_vs_period_start: int | None = None
+    months: list[NpsTrendMonth]
+
+
+class Csat2SnapshotBlock(BaseModel):
+    yes_count: int
+    no_count: int
+    answered_count: int
+    cohort_response_count: int
+    csat_pct: float | None = None
+    response_rate_pct: float
+
+
+class Csat2TrendMonth(BaseModel):
+    year: int
+    month: int
+    label: str
+    response_count: int
+    yes_count: int
+    csat_pct: float | None = None
+
+
+class Csat2DashboardResponse(BaseModel):
+    question_key: str
+    prompt: str
+    reporting_period_label: str
+    snapshot: Csat2SnapshotBlock
+    months: list[Csat2TrendMonth]
+
+
 class AnalyticsSummaryResponse(BaseModel):
     total_responses: int
     nps_average: float | None

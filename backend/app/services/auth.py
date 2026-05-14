@@ -14,7 +14,15 @@ from app.auth.refresh_tokens import (
 )
 from app.auth.tokens import create_access_token
 from app.models.auth import User
-from app.models.enums import AuditAction, AuditActorType, AuditOutcome, PermissionCode, UserStatus
+from app.models.enums import (
+    AuditAction,
+    AuditActorType,
+    AuditOutcome,
+    PermissionCode,
+    TenantStatus,
+    UserStatus,
+)
+from app.models.tenant import Tenant
 from app.services.audit import write_audit_log
 
 
@@ -106,6 +114,20 @@ async def authenticate_tenant_admin_user(
     if user.status != UserStatus.ACTIVE:
         await _reject_inactive(session, user, request_id)
 
+    tenant = await session.get(Tenant, user.tenant_id)
+    if tenant is None or tenant.status != TenantStatus.ACTIVE:
+        await write_audit_log(
+            session,
+            actor_type=AuditActorType.USER,
+            actor_id=str(user.id),
+            tenant_id=user.tenant_id,
+            action=AuditAction.LOGIN_FAILED,
+            outcome=AuditOutcome.DENIED,
+            request_id=request_id,
+            metadata={"reason": "tenant_inactive"},
+        )
+        raise AuthError("Organization access is disabled.")
+
     return await _complete_login(session, user, request_id=request_id)
 
 
@@ -174,6 +196,21 @@ async def authenticate_monolith_user(
 
     if user.status != UserStatus.ACTIVE:
         await _reject_inactive(session, user, request_id)
+
+    if user.tenant_id is not None:
+        tenant = await session.get(Tenant, user.tenant_id)
+        if tenant is None or tenant.status != TenantStatus.ACTIVE:
+            await write_audit_log(
+                session,
+                actor_type=AuditActorType.USER,
+                actor_id=str(user.id),
+                tenant_id=user.tenant_id,
+                action=AuditAction.LOGIN_FAILED,
+                outcome=AuditOutcome.DENIED,
+                request_id=request_id,
+                metadata={"reason": "tenant_inactive"},
+            )
+            raise AuthError("Organization access is disabled.")
 
     if user.tenant_id is None:
         principal = await load_principal(session, user)
@@ -244,5 +281,11 @@ async def refresh_token_pair(
     if user is None or user.status != UserStatus.ACTIVE:
         await revoke_refresh_family(redis, refresh_session.family_id)
         raise AuthError("User is not active.")
+
+    if user.tenant_id is not None:
+        tenant = await session.get(Tenant, user.tenant_id)
+        if tenant is None or tenant.status != TenantStatus.ACTIVE:
+            await revoke_refresh_family(redis, refresh_session.family_id)
+            raise AuthError("Organization access is disabled.")
 
     return await issue_token_pair(session, redis, user, family_id=refresh_session.family_id)

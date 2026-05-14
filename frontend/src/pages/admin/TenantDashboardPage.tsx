@@ -18,6 +18,7 @@ import {
   getStoredAccessToken,
   importTenantBrandingLogoFromUrl,
   ACTIVE_TENANT_STORAGE_KEY,
+  recordOrganizationVisit,
   patchTenantProfile,
   publishSurvey,
   updateTenantBranding,
@@ -58,7 +59,14 @@ import {
 import { DEFAULT_SURVEY_PRESENTATION, normalizeSurveyPresentation, type SurveyPresentation } from "../../types/surveyPresentation";
 import type { PublicBranding, PublicOrganization } from "../../types/publicFeedback";
 import { mapTenantProfileToPublicOrganization } from "../../types/publicFeedback";
+import { OrganizationSwitcherModal } from "../../components/OrganizationSwitcherModal";
+import { INDIAN_CITIES, INDIAN_STATES } from "../../data/indianRegions";
+import { AnalyticsDashboard } from "./analytics/AnalyticsDashboard";
 import { ResponsesExplorer } from "./ResponsesExplorer";
+import {
+  TENANT_SIDEBAR_STORAGE_KEY,
+  usePersistedSidebarCollapsed,
+} from "../../hooks/usePersistedSidebarCollapsed";
 
 type PageState = "loading" | "ready" | "error";
 type ActiveAdminView =
@@ -87,86 +95,6 @@ const VIEW_CONFIG: Record<ActiveAdminView, { title: string; action: string | nul
   roles: { title: "Roles", action: null },
 };
 
-const INDIAN_STATES = [
-  "Andhra Pradesh",
-  "Arunachal Pradesh",
-  "Assam",
-  "Bihar",
-  "Chhattisgarh",
-  "Goa",
-  "Gujarat",
-  "Haryana",
-  "Himachal Pradesh",
-  "Jharkhand",
-  "Karnataka",
-  "Kerala",
-  "Madhya Pradesh",
-  "Maharashtra",
-  "Manipur",
-  "Meghalaya",
-  "Mizoram",
-  "Nagaland",
-  "Odisha",
-  "Punjab",
-  "Rajasthan",
-  "Sikkim",
-  "Tamil Nadu",
-  "Telangana",
-  "Tripura",
-  "Uttar Pradesh",
-  "Uttarakhand",
-  "West Bengal",
-  "Andaman and Nicobar Islands",
-  "Chandigarh",
-  "Dadra and Nagar Haveli and Daman and Diu",
-  "Delhi",
-  "Jammu and Kashmir",
-  "Ladakh",
-  "Lakshadweep",
-  "Puducherry",
-];
-
-const INDIAN_CITIES = [
-  "Ahmedabad",
-  "Amritsar",
-  "Bengaluru",
-  "Bhopal",
-  "Bhubaneswar",
-  "Chandigarh",
-  "Chennai",
-  "Coimbatore",
-  "Delhi",
-  "Faridabad",
-  "Ghaziabad",
-  "Gurugram",
-  "Guwahati",
-  "Hyderabad",
-  "Indore",
-  "Jaipur",
-  "Kochi",
-  "Kolkata",
-  "Lucknow",
-  "Ludhiana",
-  "Madurai",
-  "Mangaluru",
-  "Mumbai",
-  "Mysuru",
-  "Nagpur",
-  "Nashik",
-  "Noida",
-  "Patna",
-  "Pune",
-  "Raipur",
-  "Rajkot",
-  "Ranchi",
-  "Surat",
-  "Thiruvananthapuram",
-  "Vadodara",
-  "Varanasi",
-  "Vijayawada",
-  "Visakhapatnam",
-];
-
 const ROLE_FILTER_ALL = "__ALL__";
 
 function humanizeRoleCode(code: string): string {
@@ -189,18 +117,22 @@ function formatRoleCodesForDisplay(me: MeResponse | null | undefined, roles: Rol
 
 function SidebarAccountMenu({
   activeTenantId,
+  currentTenantName,
   email,
   onSignOut,
-  onTenantChange,
+  onOpenOrgSwitcher,
   roleLine,
-  tenantOptions,
+  showOrgSwitcher,
+  sidebarCollapsed,
 }: {
   activeTenantId: string | null;
+  currentTenantName?: string;
   email: string | undefined;
   onSignOut: () => void;
-  onTenantChange: (tenantId: string) => void;
+  onOpenOrgSwitcher?: () => void;
   roleLine: string;
-  tenantOptions: Tenant[];
+  showOrgSwitcher: boolean;
+  sidebarCollapsed?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -242,6 +174,11 @@ function SidebarAccountMenu({
         aria-haspopup="true"
         className="user-row"
         type="button"
+        title={
+          sidebarCollapsed
+            ? [email ?? "Account", roleLine].filter((x) => x.trim().length > 0).join(" · ")
+            : undefined
+        }
         onClick={() => setMenuOpen((open) => !open)}
       >
         <div className="avatar">{userInitials(email)}</div>
@@ -255,31 +192,31 @@ function SidebarAccountMenu({
       </button>
       {menuOpen ? (
         <div className="account-menu" role="menu">
-          {tenantOptions.length > 0 && activeTenantId ? (
+          {showOrgSwitcher && activeTenantId && currentTenantName ? (
             <div className="account-menu-section" onClick={(e) => e.stopPropagation()}>
               <div className="account-menu-label">Organization</div>
-              <select
-                aria-label="Active organization"
-                className="account-menu-tenant-select"
-                value={activeTenantId}
-                onChange={(event) => {
-                  const nextId = event.target.value;
-                  if (nextId && nextId !== activeTenantId) {
-                    window.sessionStorage.setItem(ACTIVE_TENANT_STORAGE_KEY, nextId);
-                    onTenantChange(nextId);
-                  }
-                  setMenuOpen(false);
-                }}
-              >
-                {tenantOptions.map((tenant) => (
-                  <option key={tenant.id} value={tenant.id}>
-                    {tenant.name} ({tenant.slug})
-                  </option>
-                ))}
-              </select>
+              <div className="account-menu-org-line" title={currentTenantName}>
+                {currentTenantName}
+              </div>
+              {onOpenOrgSwitcher ? (
+                <button
+                  className="account-menu-item account-menu-item--compact"
+                  role="menuitem"
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onOpenOrgSwitcher();
+                  }}
+                >
+                  <span className="material-symbols-outlined" aria-hidden>
+                    swap_horiz
+                  </span>
+                  Switch organization…
+                </button>
+              ) : null}
             </div>
           ) : null}
-          {tenantOptions.length > 0 && activeTenantId ? <div className="account-menu-divider" /> : null}
+          {showOrgSwitcher && activeTenantId ? <div className="account-menu-divider" /> : null}
           <button
             className="account-menu-item account-menu-item--danger"
             role="menuitem"
@@ -310,6 +247,10 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
   const [activeCreateModal, setActiveCreateModal] = useState<CreateModalType | null>(null);
   const [isCreatingSurvey, setIsCreatingSurvey] = useState(false);
   const [activeSurveyBuilderId, setActiveSurveyBuilderId] = useState<string | null>(null);
+  const [orgSwitcherOpen, setOrgSwitcherOpen] = useState(false);
+  const { collapsed: sidebarCollapsed, toggle: toggleSidebarCollapsed } = usePersistedSidebarCollapsed(
+    TENANT_SIDEBAR_STORAGE_KEY,
+  );
 
   async function loadDashboard(
     overrideTenantId?: string | null,
@@ -371,6 +312,10 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
     setDashboardData(nextDashboardData);
     setPageState("ready");
 
+    if (!nextMe.tenant_id) {
+      recordOrganizationVisit(tenantId);
+    }
+
     const openBuilder = options?.openSurveyBuilderAfter;
     if (openBuilder) {
       setActiveSurveyBuilderId(openBuilder);
@@ -411,6 +356,9 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
   const canAccessSettings = can("branding:read") || can("user:read") || can("role:read");
   const canListTemplates = can("survey:read") || can("channel:read");
   const showSettingsNavGroup = canAccessSettings || canListTemplates;
+  const canSwitchOrgs = Boolean(
+    me && me.tenant_id === null && tenantPickerOptions.length > 0 && pageState === "ready",
+  );
   const canUseActiveAction =
     (activeView === "locations" && can("location:create")) ||
     (activeView === "surveys" && can("survey:create")) ||
@@ -419,124 +367,175 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
     (activeView === "analytics" && can("analytics:read"));
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-logo">
-          <div className="logo-dot">G</div>
-          <span className="logo-text">goliSoda</span>
-        </div>
-        <nav className="sidebar-nav" aria-label="Primary navigation">
-          <div className="nav-section-label">Overview</div>
-          <AdminNavItem
-            activeView={activeView}
-            icon="dashboard"
-            label="Dashboard"
-            onSelect={setActiveView}
-            view="dashboard"
-          />
-          <div className="nav-section-label">Manage</div>
-          {can("location:read") ? (
+    <>
+      <div className="app-shell">
+        <aside
+          className={`sidebar${sidebarCollapsed ? " sidebar--collapsed" : ""}`}
+          aria-label="Tenant administration"
+        >
+          <div className="sidebar-logo">
+            <div className="sidebar-logo-brand">
+              <div className="logo-dot">G</div>
+              <span className="logo-text">goliSoda</span>
+            </div>
+            <button
+              type="button"
+              className="sidebar-collapse-toggle"
+              onClick={() => toggleSidebarCollapsed()}
+              aria-expanded={!sidebarCollapsed}
+              aria-controls="tenant-sidebar-nav"
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <span className="material-symbols-outlined" aria-hidden>
+                {sidebarCollapsed ? "chevron_right" : "chevron_left"}
+              </span>
+            </button>
+          </div>
+          <nav className="sidebar-nav" id="tenant-sidebar-nav" aria-label="Primary navigation">
+            <div className="nav-section-label">Overview</div>
             <AdminNavItem
               activeView={activeView}
-              icon="location_on"
-              label="Locations"
+              collapsed={sidebarCollapsed}
+              icon="dashboard"
+              label="Dashboard"
               onSelect={setActiveView}
-              view="locations"
+              view="dashboard"
             />
-          ) : null}
-          {can("survey:read") ? (
-            <AdminNavItem
-              activeView={activeView}
-              icon="assignment"
-              label="Surveys"
-              onSelect={setActiveView}
-              view="surveys"
-            />
-          ) : null}
-          {can("channel:read") ? (
-            <AdminNavItem
-              activeView={activeView}
-              icon="qr_code_2"
-              label="Channel"
-              onSelect={setActiveView}
-              view="channels"
-            />
-          ) : null}
-          {can("response:read") ? (
-            <AdminNavItem
-              activeView={activeView}
-              icon="inbox"
-              label="Response"
-              onSelect={setActiveView}
-              view="responses"
-            />
-          ) : null}
-          {can("analytics:read") ? (
-            <>
-              <div className="nav-section-label">Analytics</div>
+            <div className="nav-section-label">Manage</div>
+            {can("location:read") ? (
               <AdminNavItem
                 activeView={activeView}
-                icon="bar_chart"
-                label="Analytics"
+                collapsed={sidebarCollapsed}
+                icon="location_on"
+                label="Locations"
                 onSelect={setActiveView}
-                view="analytics"
+                view="locations"
               />
-            </>
-          ) : null}
-          {showSettingsNavGroup ? <div className="nav-section-label">Settings</div> : null}
-          {can("branding:read") ? (
-            <AdminNavItem
-              activeView={activeView}
-              icon="business"
-              label="Organization"
-              onSelect={setActiveView}
-              view="organization"
+            ) : null}
+            {can("survey:read") ? (
+              <AdminNavItem
+                activeView={activeView}
+                collapsed={sidebarCollapsed}
+                icon="assignment"
+                label="Surveys"
+                onSelect={setActiveView}
+                view="surveys"
+              />
+            ) : null}
+            {can("channel:read") ? (
+              <AdminNavItem
+                activeView={activeView}
+                collapsed={sidebarCollapsed}
+                icon="qr_code_2"
+                label="Channel"
+                onSelect={setActiveView}
+                view="channels"
+              />
+            ) : null}
+            {can("response:read") ? (
+              <AdminNavItem
+                activeView={activeView}
+                collapsed={sidebarCollapsed}
+                icon="inbox"
+                label="Response"
+                onSelect={setActiveView}
+                view="responses"
+              />
+            ) : null}
+            {can("analytics:read") ? (
+              <>
+                <div className="nav-section-label">Analytics</div>
+                <AdminNavItem
+                  activeView={activeView}
+                  collapsed={sidebarCollapsed}
+                  icon="bar_chart"
+                  label="Analytics"
+                  onSelect={setActiveView}
+                  view="analytics"
+                />
+              </>
+            ) : null}
+            {showSettingsNavGroup ? <div className="nav-section-label">Settings</div> : null}
+            {can("branding:read") ? (
+              <AdminNavItem
+                activeView={activeView}
+                collapsed={sidebarCollapsed}
+                icon="business"
+                label="Organization"
+                onSelect={setActiveView}
+                view="organization"
+              />
+            ) : null}
+            {canListTemplates ? (
+              <AdminNavItem
+                activeView={activeView}
+                collapsed={sidebarCollapsed}
+                icon="style"
+                label="Templates"
+                onSelect={setActiveView}
+                view="templates"
+              />
+            ) : null}
+            {can("user:read") ? (
+              <AdminNavItem
+                activeView={activeView}
+                collapsed={sidebarCollapsed}
+                icon="group"
+                label="Users"
+                onSelect={setActiveView}
+                view="users"
+              />
+            ) : null}
+            {can("role:read") ? (
+              <AdminNavItem
+                activeView={activeView}
+                collapsed={sidebarCollapsed}
+                icon="admin_panel_settings"
+                label="Roles"
+                onSelect={setActiveView}
+                view="roles"
+              />
+            ) : null}
+          </nav>
+          <div className="sidebar-footer">
+            <SidebarAccountMenu
+              activeTenantId={dashboardData?.tenant.id ?? null}
+              currentTenantName={dashboardData?.tenant.name}
+              email={me?.email}
+              onOpenOrgSwitcher={canSwitchOrgs ? () => setOrgSwitcherOpen(true) : undefined}
+              onSignOut={signOut}
+              roleLine={formatRoleCodesForDisplay(me, dashboardData?.roles ?? [])}
+              showOrgSwitcher={canSwitchOrgs}
+              sidebarCollapsed={sidebarCollapsed}
             />
-          ) : null}
-          {canListTemplates ? (
-            <AdminNavItem
-              activeView={activeView}
-              icon="style"
-              label="Templates"
-              onSelect={setActiveView}
-              view="templates"
-            />
-          ) : null}
-          {can("user:read") ? (
-            <AdminNavItem
-              activeView={activeView}
-              icon="group"
-              label="Users"
-              onSelect={setActiveView}
-              view="users"
-            />
-          ) : null}
-          {can("role:read") ? (
-            <AdminNavItem
-              activeView={activeView}
-              icon="admin_panel_settings"
-              label="Roles"
-              onSelect={setActiveView}
-              view="roles"
-            />
-          ) : null}
-        </nav>
-        <div className="sidebar-footer">
-          <SidebarAccountMenu
-            activeTenantId={dashboardData?.tenant.id ?? null}
-            email={me?.email}
-            onSignOut={signOut}
-            onTenantChange={(nextId) => {
-              void loadDashboard(nextId);
-            }}
-            roleLine={formatRoleCodesForDisplay(me, dashboardData?.roles ?? [])}
-            tenantOptions={tenantPickerOptions}
-          />
-        </div>
-      </aside>
+          </div>
+        </aside>
       <div className="main">
         <header className="topbar">
-          <h1 className="topbar-title">{activeViewConfig.title}</h1>
+          <div className="topbar-leading">
+            <h1 className="topbar-title">{activeViewConfig.title}</h1>
+            {canSwitchOrgs && dashboardData ? (
+              <button
+                className="topbar-org-chip"
+                type="button"
+                onClick={() => setOrgSwitcherOpen(true)}
+                aria-expanded={orgSwitcherOpen}
+                aria-haspopup="dialog"
+                aria-label={`Current organization: ${dashboardData.tenant.name}. Switch organization.`}
+              >
+                <span className="material-symbols-outlined topbar-org-chip-icon" aria-hidden>
+                  domain
+                </span>
+                <span className="topbar-org-chip-text">
+                  <span className="topbar-org-chip-label">Organization</span>
+                  <span className="topbar-org-chip-name">{dashboardData.tenant.name}</span>
+                </span>
+                <span className="material-symbols-outlined topbar-org-chip-caret" aria-hidden>
+                  unfold_more
+                </span>
+              </button>
+            ) : null}
+          </div>
           <div className="topbar-actions">
             <button className="btn btn--ghost btn--icon" type="button" aria-label="Notifications">
               <span className="material-symbols-outlined">notifications_none</span>
@@ -625,17 +624,32 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
         />
       ) : null}
     </div>
+    {canSwitchOrgs && dashboardData ? (
+      <OrganizationSwitcherModal
+        activeTenantId={dashboardData.tenant.id}
+        open={orgSwitcherOpen}
+        tenants={tenantPickerOptions}
+        onClose={() => setOrgSwitcherOpen(false)}
+        onSelect={(id) => {
+          window.sessionStorage.setItem(ACTIVE_TENANT_STORAGE_KEY, id);
+          void loadDashboard(id);
+        }}
+      />
+    ) : null}
+    </>
   );
 }
 
 function AdminNavItem({
   activeView,
+  collapsed,
   icon,
   label,
   onSelect,
   view,
 }: {
   activeView: ActiveAdminView;
+  collapsed?: boolean;
   icon: string;
   label: string;
   onSelect: (view: ActiveAdminView) => void;
@@ -645,10 +659,13 @@ function AdminNavItem({
     <button
       className={`nav-item ${activeView === view ? "active" : ""}`}
       type="button"
+      title={collapsed ? label : undefined}
       onClick={() => onSelect(view)}
     >
-      <span className="material-symbols-outlined">{icon}</span>
-      {label}
+      <span className="material-symbols-outlined" aria-hidden>
+        {icon}
+      </span>
+      <span className="nav-item-label">{label}</span>
     </button>
   );
 }
@@ -734,7 +751,7 @@ function AdminView({
     return <ResponsesExplorer channels={dashboardData.channels} tenantId={dashboardData.tenant.id} />;
   }
   if (activeView === "analytics") {
-    return <AnalyticsView dashboardData={dashboardData} />;
+    return <AnalyticsDashboard dashboardData={dashboardData} me={me} />;
   }
   if (activeView === "organization") {
     return <OrganizationView dashboardData={dashboardData} me={me} onUpdated={onUpdated} />;
@@ -4232,24 +4249,6 @@ function Pagination({ count, label }: { count: number; label: string }) {
   );
 }
 
-function AnalyticsView({ dashboardData }: { dashboardData: DashboardData }) {
-  return (
-    <div className="section-stack">
-      <div className="stat-grid">
-        <StatCard label="Responses" value={dashboardData.analytics.total_responses} />
-        <StatCard label="Avg NPS" value={dashboardData.analytics.nps_average ?? 0} />
-        <StatCard label="Avg CSAT" value={dashboardData.analytics.csat_average ?? 0} />
-        <StatCard label="Active channels" value={dashboardData.analytics.active_channels} />
-      </div>
-      <div className="chart-placeholder">
-        <span className="material-symbols-outlined chart-placeholder-icon">insights</span>
-        <div className="text-secondary">Trend charts and outlet comparison come next.</div>
-        <div className="text-sm text-secondary">Summary cards are powered by live response data.</div>
-      </div>
-    </div>
-  );
-}
-
 function TemplatesView({ dashboardData }: { dashboardData: DashboardData }) {
   const brandingPreview: PublicBranding = {
     logo_url: dashboardData.branding.logo_url,
@@ -4605,8 +4604,9 @@ function OrganizationView({
                   className="field-input"
                   disabled={!canTenantUpdate}
                   id="org-city"
+                  list="org-indian-cities"
                   onChange={(event) => setAddressCity(event.target.value)}
-                  placeholder="City"
+                  placeholder="Search city"
                   type="text"
                   value={addressCity}
                 />
@@ -4619,8 +4619,9 @@ function OrganizationView({
                   className="field-input"
                   disabled={!canTenantUpdate}
                   id="org-state"
+                  list="org-indian-states"
                   onChange={(event) => setAddressState(event.target.value)}
-                  placeholder="State"
+                  placeholder="Search state or union territory"
                   type="text"
                   value={addressState}
                 />
@@ -4641,6 +4642,16 @@ function OrganizationView({
                 />
               </div>
             </div>
+            <datalist id="org-indian-cities">
+              {INDIAN_CITIES.map((cityName) => (
+                <option key={cityName} value={cityName} />
+              ))}
+            </datalist>
+            <datalist id="org-indian-states">
+              {INDIAN_STATES.map((stateName) => (
+                <option key={stateName} value={stateName} />
+              ))}
+            </datalist>
           </fieldset>
           <div className="field-row">
             <div className="field">

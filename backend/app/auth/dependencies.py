@@ -9,7 +9,8 @@ from app.auth.principal import Principal, load_principal
 from app.auth.tokens import TokenError, decode_access_token
 from app.core.database import get_session
 from app.models.auth import User
-from app.models.enums import UserStatus
+from app.models.enums import TenantStatus, UserStatus
+from app.models.tenant import Tenant
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -39,6 +40,14 @@ async def get_current_principal(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User is not active.",
         )
+
+    if user.tenant_id is not None:
+        tenant = await session.get(Tenant, user.tenant_id)
+        if tenant is None or tenant.status != TenantStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Organization is not active.",
+            )
 
     token_version = int(payload.get("token_version", 0))
     if user.token_version != token_version:

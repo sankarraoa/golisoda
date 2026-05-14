@@ -2,21 +2,23 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.response_schemas import (
     AnalyticsSummaryResponse,
+    ChoiceCountRow,
+    Csat2DashboardResponse,
     DistributionBucket,
     FeedbackResponseListResponse,
     FeedbackResponseRead,
+    NpsDashboardResponse,
+    QuestionAggregateRead,
     ResponseAggregateReport,
     ResponseAnswerRead,
     ResponseQuestionDefinition,
     VersionCohortAggregateRead,
-    QuestionAggregateRead,
-    ChoiceCountRow,
 )
 from app.auth.authorization import require_permission, require_tenant_scope
 from app.auth.dependencies import get_current_principal
@@ -57,18 +59,25 @@ async def aggregate_feedback_responses(
     channel_id: UUID,
     principal: Annotated[Principal, Depends(get_current_principal)],
     session: Annotated[AsyncSession, Depends(get_session)],
+    survey_version_id: UUID | None = None,
     submitted_after: datetime | None = None,
     submitted_before: datetime | None = None,
 ) -> ResponseAggregateReport:
     require_permission(principal, PermissionCode.RESPONSE_READ)
     require_tenant_scope(principal, tenant_id)
-    channel = await _require_channel_in_tenant(session, tenant_id=tenant_id, channel_id=channel_id, principal=principal)
+    channel = await _require_channel_in_tenant(
+        session,
+        tenant_id=tenant_id,
+        channel_id=channel_id,
+        principal=principal,
+    )
 
     loc_ids = principal.location_ids if is_location_scoped(principal) else None
     raw = await response_reports.aggregate_channel_responses(
         session,
         tenant_id=tenant_id,
         channel_id=channel_id,
+        survey_version_id=survey_version_id,
         submitted_after=submitted_after,
         submitted_before=submitted_before,
         location_ids=loc_ids,
@@ -113,6 +122,80 @@ async def aggregate_feedback_responses(
     )
 
 
+@router.get("/analytics/nps-dashboard", response_model=NpsDashboardResponse)
+async def nps_analytics_dashboard(
+    tenant_id: UUID,
+    channel_id: UUID,
+    survey_version_id: UUID,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    question_key: str = Query(..., min_length=1, max_length=120),
+) -> NpsDashboardResponse:
+    require_permission(principal, PermissionCode.ANALYTICS_READ)
+    require_tenant_scope(principal, tenant_id)
+    await _require_channel_in_tenant(
+        session,
+        tenant_id=tenant_id,
+        channel_id=channel_id,
+        principal=principal,
+    )
+
+    version_row = await session.get(SurveyVersion, survey_version_id)
+    if version_row is None or version_row.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Survey version not found.",
+        )
+
+    loc_ids = principal.location_ids if is_location_scoped(principal) else None
+    raw = await response_reports.build_nps_analytics_dashboard(
+        session,
+        tenant_id=tenant_id,
+        channel_id=channel_id,
+        survey_version_id=survey_version_id,
+        question_key=question_key,
+        location_ids=loc_ids,
+    )
+    return NpsDashboardResponse(**raw)
+
+
+@router.get("/analytics/csat2-dashboard", response_model=Csat2DashboardResponse)
+async def csat2_analytics_dashboard(
+    tenant_id: UUID,
+    channel_id: UUID,
+    survey_version_id: UUID,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    question_key: str = Query(..., min_length=1, max_length=120),
+) -> Csat2DashboardResponse:
+    require_permission(principal, PermissionCode.ANALYTICS_READ)
+    require_tenant_scope(principal, tenant_id)
+    await _require_channel_in_tenant(
+        session,
+        tenant_id=tenant_id,
+        channel_id=channel_id,
+        principal=principal,
+    )
+
+    version_row = await session.get(SurveyVersion, survey_version_id)
+    if version_row is None or version_row.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Survey version not found.",
+        )
+
+    loc_ids = principal.location_ids if is_location_scoped(principal) else None
+    raw = await response_reports.build_csat2_binary_dashboard(
+        session,
+        tenant_id=tenant_id,
+        channel_id=channel_id,
+        survey_version_id=survey_version_id,
+        question_key=question_key,
+        location_ids=loc_ids,
+    )
+    return Csat2DashboardResponse(**raw)
+
+
 @router.get("/responses", response_model=FeedbackResponseListResponse)
 async def list_feedback_responses(
     tenant_id: UUID,
@@ -129,7 +212,12 @@ async def list_feedback_responses(
     require_tenant_scope(principal, tenant_id)
 
     if channel_id is not None:
-        await _require_channel_in_tenant(session, tenant_id=tenant_id, channel_id=channel_id, principal=principal)
+        await _require_channel_in_tenant(
+            session,
+            tenant_id=tenant_id,
+            channel_id=channel_id,
+            principal=principal,
+        )
 
     loc_ids = principal.location_ids if is_location_scoped(principal) else None
     conds = response_reports.base_response_filter(

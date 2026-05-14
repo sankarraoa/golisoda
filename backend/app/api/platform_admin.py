@@ -1,6 +1,10 @@
 """Platform (super admin) API: manage platform operators and tenant onboarding."""
 
+import re
+import secrets
+from datetime import UTC, datetime
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -8,8 +12,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.platform_schemas import (
+    PlatformTenantAddressPatchRequest,
     PlatformTenantCreateRequest,
+    PlatformTenantListEntry,
+    PlatformTenantPatchRequest,
     SuperAdminUserCreateRequest,
+    SuperAdminUserPatchRequest,
     SuperAdminUserResponse,
 )
 from app.api.tenant_schemas import TenantResponse
@@ -37,7 +45,129 @@ from app.services.audit import write_audit_log
 
 router = APIRouter(prefix="/platform", tags=["platform"])
 
+PLATFORM_SUPER_ADMIN_INITIAL_PASSWORD = "test1234"
 TENANT_ADMIN_INITIAL_PASSWORD = "test1234"
+
+
+def _optional_address_line(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped if stripped else None
+
+
+def _optional_trimmed(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped if stripped else None
+
+
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$")
+
+_PLATFORM_TENANT_PROFILE_FIELDS = frozenset(
+    {
+        "name",
+        "slug",
+        "default_locale",
+        "address_line1",
+        "address_line2",
+        "address_city",
+        "address_state",
+        "address_postal_code",
+    }
+)
+
+
+async def _tenant_slug_in_use(session: AsyncSession, slug: str, exclude_tenant_id: UUID) -> bool:
+    existing = await session.scalar(
+        select(Tenant.id).where(Tenant.slug == slug, Tenant.id != exclude_tenant_id)
+    )
+    return existing is not None
+
+
+def _slug_base_from_name(name: str) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", name.lower().strip()).strip("-")
+    if not base:
+        base = "tenant"
+    if len(base) > 78:
+        base = base[:78].rstrip("-")
+    if len(base) < 3:
+        base = f"{base}-org" if base else "tenant"
+        base = base[:80].rstrip("-")
+    if len(base) < 3:
+        base = "tenant"
+    return base
+
+
+async def _allocate_unique_tenant_slug(session: AsyncSession, name: str) -> str:
+    base = _slug_base_from_name(name)
+    for n in range(0, 400):
+        if n == 0:
+            candidate = base
+        else:
+            suffix = f"-{n}"
+            max_base = 80 - len(suffix)
+            stem = base[:max_base] if max_base >= 1 else base[:1]
+            candidate = f"{stem}{suffix}"[:80]
+        if not _SLUG_RE.fullmatch(candidate):
+            candidate = f"t-{secrets.token_hex(6)}"
+        exists = await session.scalar(select(Tenant.id).where(Tenant.slug == candidate))
+        if exists is None:
+            return candidate
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Could not allocate a unique tenant slug.",
+    )
+
+
+async def _map_primary_tenant_admin_users(
+    session: AsyncSession, tenant_ids: list[UUID]
+) -> dict[UUID, User]:
+    """Prefer earliest tenant_admin binding; fallback to earliest tenant user (onboarding admin)."""
+    if not tenant_ids:
+        return {}
+    chosen: dict[UUID, User] = {}
+    stmt = (
+        select(User)
+        .join(UserRoleBinding, UserRoleBinding.user_id == User.id)
+        .join(Role, Role.id == UserRoleBinding.role_id)
+        .where(
+            User.tenant_id.in_(tenant_ids),
+            Role.code == "tenant_admin",
+            Role.tenant_id.is_(None) | (Role.tenant_id == User.tenant_id),
+        )
+        .order_by(User.tenant_id, User.created_at.asc())
+    )
+    rows = (await session.scalars(stmt)).all()
+    for user in rows:
+        tid = user.tenant_id
+        if tid is not None and tid not in chosen:
+            chosen[tid] = user
+
+    missing = [tid for tid in tenant_ids if tid not in chosen]
+    if missing:
+        stmt_fb = (
+            select(User)
+            .where(User.tenant_id.in_(missing))
+            .order_by(User.tenant_id, User.created_at.asc())
+        )
+        for user in (await session.scalars(stmt_fb)).all():
+            tid = user.tenant_id
+            if tid is not None and tid not in chosen:
+                chosen[tid] = user
+    return chosen
+
+
+def _platform_list_row(tenant: Tenant, admin: User | None) -> PlatformTenantListEntry:
+    """Build list row with administrator fields (explicit merge avoids serialization quirks)."""
+    base = TenantResponse.model_validate(tenant, from_attributes=True)
+    dumped = base.model_dump()
+    return PlatformTenantListEntry(
+        **dumped,
+        administrator_email=admin.email if admin else None,
+        administrator_display_name=admin.display_name if admin else None,
+    )
 
 
 def _require_platform_operator(principal: Principal) -> None:
@@ -109,11 +239,12 @@ async def create_super_admin_user(
             detail="Platform role is not provisioned. Run migrations and try again.",
         )
 
+    display_name = f"{payload.first_name.strip()} {payload.last_name.strip()}".strip()
     user = User(
         tenant_id=None,
         email=normalized_email,
-        display_name=payload.display_name,
-        password_hash=hash_password(payload.password),
+        display_name=display_name,
+        password_hash=hash_password(PLATFORM_SUPER_ADMIN_INITIAL_PASSWORD),
         status=UserStatus.ACTIVE,
         token_version=1,
     )
@@ -159,16 +290,84 @@ async def create_super_admin_user(
     )
 
 
-@router.get("/tenants", response_model=list[TenantResponse])
-async def list_all_tenants(
+@router.patch(
+    "/super-admin-users/{user_id}",
+    response_model=SuperAdminUserResponse,
+)
+async def patch_super_admin_user(
+    user_id: UUID,
+    payload: SuperAdminUserPatchRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
     principal: Annotated[Principal, Depends(get_current_principal)],
-) -> list[TenantResponse]:
+) -> SuperAdminUserResponse:
     await ensure_permissions_and_default_roles(session)
     _require_platform_operator(principal)
 
-    tenants = await session.scalars(select(Tenant).order_by(Tenant.name, Tenant.slug))
-    return [TenantResponse.model_validate(t, from_attributes=True) for t in tenants]
+    user = await session.scalar(
+        select(User).where(User.id == user_id, User.tenant_id.is_(None))
+    )
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Platform user not found.",
+        )
+
+    if payload.status == UserStatus.DISABLED and user_id == principal.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot deactivate your own account.",
+        )
+
+    if user.status != payload.status:
+        user.status = payload.status
+        user.token_version += 1
+        await write_audit_log(
+            session,
+            actor_type=AuditActorType.USER,
+            actor_id=str(principal.user_id),
+            tenant_id=None,
+            action=AuditAction.ROLE_CHANGED,
+            outcome=AuditOutcome.SUCCESS,
+            resource_type="platform_user",
+            resource_id=str(user.id),
+            metadata={"status": payload.status.value},
+        )
+        try:
+            await session.commit()
+        except IntegrityError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Could not update platform user.",
+            ) from exc
+        await session.refresh(user)
+
+    return SuperAdminUserResponse(
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        status=user.status,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+    )
+
+
+@router.get("/tenants", response_model=list[PlatformTenantListEntry])
+async def list_all_tenants(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    principal: Annotated[Principal, Depends(get_current_principal)],
+) -> list[PlatformTenantListEntry]:
+    await ensure_permissions_and_default_roles(session)
+    _require_platform_operator(principal)
+
+    tenants = list(await session.scalars(select(Tenant).order_by(Tenant.name, Tenant.slug)))
+    admin_by_tenant = await _map_primary_tenant_admin_users(session, [t.id for t in tenants])
+
+    rows: list[PlatformTenantListEntry] = []
+    for tenant in tenants:
+        admin = admin_by_tenant.get(tenant.id)
+        rows.append(_platform_list_row(tenant, admin))
+    return rows
 
 
 @router.post("/tenants", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
@@ -194,18 +393,18 @@ async def create_tenant_with_admin(
             detail="Tenant admin email is already in use. Choose a unique email.",
         )
 
-    slug_taken = await session.scalar(select(Tenant.id).where(Tenant.slug == payload.slug))
-    if slug_taken is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Tenant slug already exists.",
-        )
+    slug = await _allocate_unique_tenant_slug(session, payload.name)
 
     tenant = Tenant(
         name=payload.name,
-        slug=payload.slug,
+        slug=slug,
         default_locale=payload.default_locale,
         status=TenantStatus.ACTIVE,
+        address_line1=_optional_address_line(payload.address_line1),
+        address_line2=_optional_address_line(payload.address_line2),
+        address_city=payload.address_city,
+        address_state=payload.address_state,
+        address_postal_code=payload.address_postal_code,
     )
     session.add(tenant)
 
@@ -215,7 +414,10 @@ async def create_tenant_with_admin(
     await ensure_permissions_and_default_roles(session)
 
     role = await get_tenant_role_or_404(session, "tenant_admin", tenant_id=tenant.id)
-    display_name = payload.tenant_admin_display_name or admin_email.split("@", maxsplit=1)[0]
+    display_name = (
+        f"{payload.tenant_admin_first_name.strip()} "
+        f"{payload.tenant_admin_last_name.strip()}"
+    ).strip()
     admin_user = User(
         tenant_id=tenant.id,
         email=admin_email,
@@ -255,6 +457,161 @@ async def create_tenant_with_admin(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Could not create tenant or tenant admin user.",
+        ) from exc
+
+    await session.refresh(tenant)
+    return TenantResponse.model_validate(tenant, from_attributes=True)
+
+
+@router.patch("/tenants/{tenant_id}/address", response_model=PlatformTenantListEntry)
+async def patch_platform_tenant_address(
+    tenant_id: UUID,
+    payload: PlatformTenantAddressPatchRequest,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    principal: Annotated[Principal, Depends(get_current_principal)],
+) -> PlatformTenantListEntry:
+    await ensure_permissions_and_default_roles(session)
+    _require_platform_operator(principal)
+
+    if PermissionCode.TENANT_UPDATE.value not in principal.permission_codes:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Missing permission: {PermissionCode.TENANT_UPDATE.value}",
+        )
+
+    tenant = await session.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found.")
+
+    updates = payload.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide at least one address field to update.",
+        )
+
+    for field_name, raw in updates.items():
+        if isinstance(raw, str):
+            setattr(tenant, field_name, _optional_address_line(raw))
+        else:
+            setattr(tenant, field_name, raw)
+
+    await write_audit_log(
+        session,
+        actor_type=AuditActorType.USER,
+        actor_id=str(principal.user_id),
+        tenant_id=tenant.id,
+        action=AuditAction.TENANT_ACCESS,
+        outcome=AuditOutcome.SUCCESS,
+        resource_type="tenant",
+        resource_id=str(tenant.id),
+        metadata={"operation": "platform_patch_tenant_address", "fields": sorted(updates.keys())},
+    )
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Could not update tenant address.",
+        ) from exc
+
+    await session.refresh(tenant)
+    admin_map = await _map_primary_tenant_admin_users(session, [tenant.id])
+    return _platform_list_row(tenant, admin_map.get(tenant.id))
+
+
+@router.patch("/tenants/{tenant_id}", response_model=TenantResponse)
+async def patch_platform_tenant(
+    tenant_id: UUID,
+    payload: PlatformTenantPatchRequest,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    principal: Annotated[Principal, Depends(get_current_principal)],
+) -> TenantResponse:
+    await ensure_permissions_and_default_roles(session)
+    _require_platform_operator(principal)
+
+    tenant = await session.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found.")
+
+    updates = payload.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide at least one field to update.",
+        )
+
+    touched_profile = _PLATFORM_TENANT_PROFILE_FIELDS.intersection(updates.keys())
+    if touched_profile and PermissionCode.TENANT_UPDATE.value not in principal.permission_codes:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Missing permission: {PermissionCode.TENANT_UPDATE.value}",
+        )
+
+    new_status = updates.get("status")
+    if new_status is not None and new_status != tenant.status:
+        if new_status == TenantStatus.SUSPENDED:
+            if PermissionCode.TENANT_SUSPEND.value not in principal.permission_codes:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Missing permission: {PermissionCode.TENANT_SUSPEND.value}",
+                )
+        elif new_status == TenantStatus.ACTIVE:
+            if PermissionCode.TENANT_UPDATE.value not in principal.permission_codes:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Missing permission: {PermissionCode.TENANT_UPDATE.value}",
+                )
+        tenant.status = new_status
+        tenant.suspended_at = datetime.now(UTC) if new_status == TenantStatus.SUSPENDED else None
+
+    if "name" in updates:
+        tenant.name = updates["name"].strip()
+    if "slug" in updates:
+        slug = updates["slug"].strip().lower()
+        if not _SLUG_RE.fullmatch(slug):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid tenant slug.",
+            )
+        if await _tenant_slug_in_use(session, slug, tenant.id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="That tenant slug is already in use.",
+            )
+        tenant.slug = slug
+    if "default_locale" in updates:
+        tenant.default_locale = updates["default_locale"].strip()
+    if "address_line1" in updates:
+        tenant.address_line1 = _optional_address_line(updates["address_line1"])
+    if "address_line2" in updates:
+        tenant.address_line2 = _optional_address_line(updates["address_line2"])
+    if "address_city" in updates:
+        tenant.address_city = _optional_trimmed(updates["address_city"])
+    if "address_state" in updates:
+        tenant.address_state = _optional_trimmed(updates["address_state"])
+    if "address_postal_code" in updates:
+        tenant.address_postal_code = _optional_trimmed(updates["address_postal_code"])
+
+    await write_audit_log(
+        session,
+        actor_type=AuditActorType.USER,
+        actor_id=str(principal.user_id),
+        tenant_id=tenant.id,
+        action=AuditAction.TENANT_ACCESS,
+        outcome=AuditOutcome.SUCCESS,
+        resource_type="tenant",
+        resource_id=str(tenant.id),
+        metadata={"operation": "platform_patch_tenant", "fields": sorted(updates.keys())},
+    )
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Could not update tenant.",
         ) from exc
 
     await session.refresh(tenant)

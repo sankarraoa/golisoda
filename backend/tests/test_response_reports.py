@@ -1,4 +1,27 @@
-from app.services.response_reports import compute_question_aggregate
+from app.services.response_reports import (
+    _coerce_csat2_yes_no,
+    _go_back_months,
+    _nps_pct_triplet,
+    compute_question_aggregate,
+)
+
+
+def test_coerce_csat2_yes_no() -> None:
+    assert _coerce_csat2_yes_no(2) is True
+    assert _coerce_csat2_yes_no(1) is False
+    assert _coerce_csat2_yes_no(2.0) is True
+    assert _coerce_csat2_yes_no(0) is None
+    assert _coerce_csat2_yes_no(3) is None
+
+
+def test_go_back_months() -> None:
+    assert _go_back_months(2025, 11, 5) == (2025, 6)
+    assert _go_back_months(2025, 3, 2) == (2025, 1)
+
+
+def test_nps_pct_triplet_balanced() -> None:
+    pp, ap, dp, nps = _nps_pct_triplet({"promoter": 5, "passive": 3, "detractor": 2})
+    assert pp == 50.0 and ap == 30.0 and dp == 20.0 and nps == 30
 
 
 def test_compute_question_aggregate_nps() -> None:

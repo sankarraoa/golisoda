@@ -1,11 +1,13 @@
 import type {
   AnalyticsSummary,
   Channel,
+  Csat2DashboardPayload,
   DashboardData,
   FeedbackResponse,
   FeedbackResponseListPage,
   Location,
   MeResponse,
+  NpsDashboardPayload,
   Permission,
   QuestionType,
   ResponseAggregateReport,
@@ -125,6 +127,52 @@ export async function fetchMe(token: string): Promise<MeResponse> {
 
 export const ACTIVE_TENANT_STORAGE_KEY = "goliSoda.activeTenantId";
 
+/** Recent org switches for multi-tenant operators (localStorage, capped list). */
+export const RECENT_ORGANIZATIONS_STORAGE_KEY = "goliSoda.recentOrganizationIds";
+
+const MAX_RECENT_ORGANIZATIONS = 12;
+
+type RecentOrganizationEntry = { id: string; visitedAt: number };
+
+export function readRecentOrganizations(): RecentOrganizationEntry[] {
+  try {
+    const raw = window.localStorage.getItem(RECENT_ORGANIZATIONS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    const out: RecentOrganizationEntry[] = [];
+    for (const item of parsed) {
+      if (
+        typeof item === "object" &&
+        item !== null &&
+        "id" in item &&
+        "visitedAt" in item &&
+        typeof (item as RecentOrganizationEntry).id === "string" &&
+        typeof (item as RecentOrganizationEntry).visitedAt === "number"
+      ) {
+        out.push(item as RecentOrganizationEntry);
+      }
+    }
+    return out.slice(0, MAX_RECENT_ORGANIZATIONS);
+  } catch {
+    return [];
+  }
+}
+
+/** Call after successfully loading a tenant context (platform operators only). */
+export function recordOrganizationVisit(tenantId: string): void {
+  const without = readRecentOrganizations().filter((e) => e.id !== tenantId);
+  const next: RecentOrganizationEntry[] = [
+    { id: tenantId, visitedAt: Date.now() },
+    ...without,
+  ].slice(0, MAX_RECENT_ORGANIZATIONS);
+  window.localStorage.setItem(RECENT_ORGANIZATIONS_STORAGE_KEY, JSON.stringify(next));
+}
+
 export async function fetchTenantList(token: string): Promise<Tenant[]> {
   return authenticatedFetch<Tenant[]>("/tenants", token);
 }
@@ -217,16 +265,62 @@ export async function fetchResponseAggregateReport(
   tenantId: string,
   params: {
     channel_id: string;
+    survey_version_id?: string;
     submitted_after?: string;
     submitted_before?: string;
   },
 ): Promise<ResponseAggregateReport> {
   const search = new URLSearchParams();
   search.set("channel_id", params.channel_id);
-  if (params.submitted_after) search.set("submitted_after", params.submitted_after);
-  if (params.submitted_before) search.set("submitted_before", params.submitted_before);
+  if (params.survey_version_id) {
+    search.set("survey_version_id", params.survey_version_id);
+  }
+  if (params.submitted_after) {
+    search.set("submitted_after", params.submitted_after);
+  }
+  if (params.submitted_before) {
+    search.set("submitted_before", params.submitted_before);
+  }
   return authenticatedFetch<ResponseAggregateReport>(
     `/tenants/${tenantId}/responses/aggregate?${search.toString()}`,
+    token,
+  );
+}
+
+export async function fetchNpsAnalyticsDashboard(
+  token: string,
+  tenantId: string,
+  params: {
+    channel_id: string;
+    survey_version_id: string;
+    question_key: string;
+  },
+): Promise<NpsDashboardPayload> {
+  const search = new URLSearchParams();
+  search.set("channel_id", params.channel_id);
+  search.set("survey_version_id", params.survey_version_id);
+  search.set("question_key", params.question_key);
+  return authenticatedFetch<NpsDashboardPayload>(
+    `/tenants/${tenantId}/analytics/nps-dashboard?${search.toString()}`,
+    token,
+  );
+}
+
+export async function fetchCsat2AnalyticsDashboard(
+  token: string,
+  tenantId: string,
+  params: {
+    channel_id: string;
+    survey_version_id: string;
+    question_key: string;
+  },
+): Promise<Csat2DashboardPayload> {
+  const search = new URLSearchParams();
+  search.set("channel_id", params.channel_id);
+  search.set("survey_version_id", params.survey_version_id);
+  search.set("question_key", params.question_key);
+  return authenticatedFetch<Csat2DashboardPayload>(
+    `/tenants/${tenantId}/analytics/csat2-dashboard?${search.toString()}`,
     token,
   );
 }

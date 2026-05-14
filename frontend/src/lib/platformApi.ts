@@ -15,6 +15,9 @@ export type SuperAdminUser = {
   id: string;
   email: string;
   display_name: string;
+  first_name: string;
+  last_name: string;
+  role: string;
   status: string;
   created_at: string;
   updated_at: string;
@@ -26,6 +29,13 @@ export type PlatformTenant = {
   slug: string;
   default_locale: string;
   status: string;
+  address_line1: string | null;
+  address_line2: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_postal_code: string | null;
+  administrator_email?: string | null;
+  administrator_display_name?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -114,10 +124,21 @@ export async function listPlatformSuperAdmins(token: string): Promise<SuperAdmin
 
 export async function createPlatformSuperAdmin(
   token: string,
-  payload: { email: string; display_name: string; password: string },
+  payload: { email: string; first_name: string; last_name: string },
 ): Promise<SuperAdminUser> {
   return platformAuthFetch<SuperAdminUser>("/platform/super-admin-users", token, {
     method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function patchPlatformSuperAdminUser(
+  token: string,
+  userId: string,
+  payload: { status: "active" | "disabled" },
+): Promise<SuperAdminUser> {
+  return platformAuthFetch<SuperAdminUser>(`/platform/super-admin-users/${userId}`, token, {
+    method: "PATCH",
     body: JSON.stringify(payload),
   });
 }
@@ -130,10 +151,15 @@ export async function createPlatformTenant(
   token: string,
   payload: {
     name: string;
-    slug: string;
-    default_locale: string;
+    default_locale?: string;
+    address_line1?: string | null;
+    address_line2?: string | null;
+    address_city: string;
+    address_state: string;
+    address_postal_code: string;
+    tenant_admin_first_name: string;
+    tenant_admin_last_name: string;
     tenant_admin_email: string;
-    tenant_admin_display_name?: string | null;
   },
 ): Promise<PlatformTenant> {
   return platformAuthFetch<PlatformTenant>("/platform/tenants", token, {
@@ -141,6 +167,47 @@ export async function createPlatformTenant(
     body: JSON.stringify(payload),
   });
 }
+
+export async function patchPlatformTenant(
+  token: string,
+  tenantId: string,
+  payload: {
+    status?: "active" | "suspended";
+    name?: string;
+    slug?: string;
+    default_locale?: string;
+    address_line1?: string | null;
+    address_line2?: string | null;
+    address_city?: string | null;
+    address_state?: string | null;
+    address_postal_code?: string | null;
+  },
+): Promise<PlatformTenant> {
+  return platformAuthFetch<PlatformTenant>(`/platform/tenants/${tenantId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function patchPlatformTenantAddress(
+  token: string,
+  tenantId: string,
+  payload: {
+    address_line1?: string | null;
+    address_line2?: string | null;
+    address_city?: string | null;
+    address_state?: string | null;
+    address_postal_code?: string | null;
+  },
+): Promise<PlatformTenant> {
+  return platformAuthFetch<PlatformTenant>(`/platform/tenants/${tenantId}/address`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Initial password set for new platform super admins (server-side). */
+export const PLATFORM_SUPER_ADMIN_DEFAULT_PASSWORD = "test1234";
 
 /** Initial password provisioned for the tenant administrator (platform onboarding). */
 export const TENANT_ADMIN_DEFAULT_PASSWORD = "test1234";

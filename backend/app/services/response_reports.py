@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from collections.abc import Iterable
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import Select, func, select
@@ -13,6 +14,7 @@ from app.models.survey import SurveyVersion
 
 MAX_TEXT_SAMPLES = 5
 TEXT_SAMPLE_MAX_LEN = 200
+MONTH_ABBREV = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 
 def question_definitions_from_snapshot(schema_snapshot: dict) -> list[dict]:
@@ -48,7 +50,10 @@ def _iter_multi_values(value: object) -> tuple[str, ...]:
 
 
 def _option_label_map(question: dict) -> dict[str, str]:
-    return {opt["value"]: opt.get("label") or opt["value"] for opt in (question.get("options") or [])}
+    return {
+        opt["value"]: opt.get("label") or opt["value"]
+        for opt in (question.get("options") or [])
+    }
 
 
 def compute_question_aggregate(
@@ -106,7 +111,9 @@ def compute_question_aggregate(
             average = round(sum(nums) / len(nums), 2)
             min_value = min(nums)
             max_value = max(nums)
-        distribution = [{"value": k, "count": c} for k, c in sorted(bucket.items(), key=lambda x: x[0])]
+        distribution = [
+            {"value": k, "count": c} for k, c in sorted(bucket.items(), key=lambda x: x[0])
+        ]
 
     elif qt == QuestionType.MULTI_SELECTION or q_type == "multi_selection":
         choice_totals: dict[str, int] = defaultdict(int)
@@ -212,6 +219,7 @@ async def aggregate_channel_responses(
     *,
     tenant_id: UUID,
     channel_id: UUID,
+    survey_version_id: UUID | None = None,
     submitted_after=None,
     submitted_before=None,
     location_ids: list[UUID] | None = None,
@@ -220,6 +228,7 @@ async def aggregate_channel_responses(
     conds = base_response_filter(
         tenant_id,
         channel_id=channel_id,
+        survey_version_id=survey_version_id,
         submitted_after=submitted_after,
         submitted_before=submitted_before,
         location_ids=location_ids,
@@ -239,7 +248,9 @@ async def aggregate_channel_responses(
     rows = (await session.execute(ans_stmt)).all()
 
     resp_count_stmt = (
-        select(Response.survey_version_id, func.count(Response.id)).where(*conds).group_by(Response.survey_version_id)
+        select(Response.survey_version_id, func.count(Response.id))
+        .where(*conds)
+        .group_by(Response.survey_version_id)
     )
     resp_count_rows = (await session.execute(resp_count_stmt)).all()
     survey_version_counts: dict[UUID, int] = {
@@ -310,11 +321,287 @@ async def aggregate_channel_responses(
                 "survey_title": survey_block.get("title") or "",
                 "version_number": ver.version_number,
                 "response_count": response_count,
-                "questions": sorted(questions_out, key=lambda q: (q["sort_order"], q["question_key"])),
+                "questions": sorted(
+                    questions_out,
+                    key=lambda q: (q["sort_order"], q["question_key"]),
+                ),
             }
         )
 
     return {"cohorts": cohorts}
+
+
+def _go_back_months(year: int, month: int, back: int) -> tuple[int, int]:
+    mm = month
+    yy = year
+    for _ in range(back):
+        mm -= 1
+        if mm < 1:
+            mm = 12
+            yy -= 1
+    return yy, mm
+
+
+def _coerce_nps_score(value: object) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    try:
+        return float(str(value).strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def _classify_nps_segment(score: float) -> str:
+    if score >= 9:
+        return "promoter"
+    if score >= 7:
+        return "passive"
+    return "detractor"
+
+
+def _coerce_csat2_yes_no(value: object) -> bool | None:
+    """Map stored CSAT-2 value to True=Yes (2) / False=No (1)."""
+    n = _coerce_nps_score(value)
+    if n is None:
+        return None
+    if abs(n - 2.0) < 0.001:
+        return True
+    if abs(n - 1.0) < 0.001:
+        return False
+    return None
+
+
+def _nps_pct_triplet(counts: dict[str, int]) -> tuple[float, float, float, int | None]:
+    p = int(counts.get("promoter", 0))
+    passive_n = int(counts.get("passive", 0))
+    d = int(counts.get("detractor", 0))
+    total = p + passive_n + d
+    if total == 0:
+        return 0.0, 0.0, 0.0, None
+    pp = round(100.0 * p / total, 1)
+    ap = round(100.0 * passive_n / total, 1)
+    dp = round(100.0 * d / total, 1)
+    raw_nps = (100.0 * p / total) - (100.0 * d / total)
+    return pp, ap, dp, int(round(raw_nps))
+
+
+async def build_nps_analytics_dashboard(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    channel_id: UUID,
+    survey_version_id: UUID,
+    question_key: str,
+    location_ids: list[UUID] | None = None,
+) -> dict:
+    """Six-month stacked-bar context + headline snapshot matching tenant analytics UI."""
+    conds = base_response_filter(
+        tenant_id,
+        channel_id=channel_id,
+        survey_version_id=survey_version_id,
+        location_ids=location_ids,
+    )
+    stmt = (
+        select(Response.submitted_at, ResponseAnswer.value_json)
+        .join(ResponseAnswer, ResponseAnswer.response_id == Response.id)
+        .where(
+            *conds,
+            ResponseAnswer.tenant_id == tenant_id,
+            ResponseAnswer.question_key == question_key,
+            ResponseAnswer.question_type == QuestionType.NPS.value,
+            ResponseAnswer.is_pii.is_(False),
+        )
+    )
+    rows = list((await session.execute(stmt)).all())
+
+    scored: list[tuple[datetime, float]] = []
+    for submitted_at, val in rows:
+        sc = _coerce_nps_score(val)
+        if sc is None or not (0 <= sc <= 10):
+            continue
+        scored.append((submitted_at, sc))
+
+    counts_all: dict[str, int] = defaultdict(int)
+    for _, sc in scored:
+        counts_all[_classify_nps_segment(sc)] += 1
+    pp_all, ap_all, dp_all, nps_snap = _nps_pct_triplet(dict(counts_all))
+    total_all = sum(counts_all.values())
+
+    bucket_counts: dict[tuple[int, int], dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for ts, sc in scored:
+        ts_eff = ts
+        if ts_eff.tzinfo is None:
+            ts_eff = ts_eff.replace(tzinfo=UTC)
+        ym = (ts_eff.year, ts_eff.month)
+        bucket_counts[ym][_classify_nps_segment(sc)] += 1
+
+    now_anchor = datetime.now(UTC)
+    months_template: list[dict] = []
+    for back in (5, 4, 3, 2, 1, 0):
+        yy, mm = _go_back_months(now_anchor.year, now_anchor.month, back)
+        ctm = bucket_counts.get((yy, mm), defaultdict(int))
+        pp_m, ap_m, dp_m, nps_m = _nps_pct_triplet(dict(ctm))
+        total_m = sum(int(ctm[k]) for k in ("promoter", "passive", "detractor"))
+        months_template.append(
+            {
+                "year": yy,
+                "month": mm,
+                "label": MONTH_ABBREV[mm - 1],
+                "response_count": total_m,
+                "promoters_pct": pp_m,
+                "passives_pct": ap_m,
+                "detractors_pct": dp_m,
+                "nps": nps_m,
+            }
+        )
+
+    delta: int | None = None
+    if months_template:
+        oldest = months_template[0]["nps"]
+        newest = months_template[-1]["nps"]
+        if oldest is not None and newest is not None:
+            delta = newest - oldest
+
+    period_label = (
+        f"{months_template[0]['label']} {months_template[0]['year']} – "
+        f"{months_template[-1]['label']} {months_template[-1]['year']}"
+        if months_template
+        else ""
+    )
+
+    prompt = question_key
+    ver = await session.get(SurveyVersion, survey_version_id)
+    if ver and ver.schema_snapshot:
+        for q in question_definitions_from_snapshot(ver.schema_snapshot or {}):
+            if q["question_key"] == question_key:
+                prompt = str(q.get("prompt") or question_key)
+                break
+
+    return {
+        "question_key": question_key,
+        "prompt": prompt,
+        "reporting_period_label": period_label,
+        "snapshot": {
+            "response_count": total_all,
+            "promoters_pct": pp_all,
+            "passives_pct": ap_all,
+            "detractors_pct": dp_all,
+            "nps": nps_snap,
+        },
+        "nps_delta_vs_period_start": delta,
+        "months": months_template,
+    }
+
+
+async def build_csat2_binary_dashboard(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    channel_id: UUID,
+    survey_version_id: UUID,
+    question_key: str,
+    location_ids: list[UUID] | None = None,
+) -> dict:
+    """Yes/No CSAT-2 headline + six-month CSAT % trend (answers only, excludes invalid values)."""
+    conds = base_response_filter(
+        tenant_id,
+        channel_id=channel_id,
+        survey_version_id=survey_version_id,
+        location_ids=location_ids,
+    )
+    cohort_total = int(
+        await session.scalar(select(func.count()).select_from(Response).where(*conds)) or 0
+    )
+
+    stmt = (
+        select(Response.submitted_at, ResponseAnswer.value_json)
+        .join(ResponseAnswer, ResponseAnswer.response_id == Response.id)
+        .where(
+            *conds,
+            ResponseAnswer.tenant_id == tenant_id,
+            ResponseAnswer.question_key == question_key,
+            ResponseAnswer.question_type == QuestionType.CSAT_2.value,
+            ResponseAnswer.is_pii.is_(False),
+        )
+    )
+    rows = list((await session.execute(stmt)).all())
+
+    scored: list[tuple[datetime, bool]] = []
+    for submitted_at, val in rows:
+        yn = _coerce_csat2_yes_no(val)
+        if yn is None:
+            continue
+        scored.append((submitted_at, yn))
+
+    yes_all = sum(1 for _, y in scored if y)
+    no_all = sum(1 for _, y in scored if not y)
+    answered_all = yes_all + no_all
+    csat_pct = round(100.0 * yes_all / answered_all, 1) if answered_all else None
+    rr_pct = round(100.0 * answered_all / cohort_total, 1) if cohort_total else 0.0
+
+    bucket_counts: dict[tuple[int, int], tuple[int, int]] = {}
+    for ts, is_yes in scored:
+        ts_eff = ts
+        if ts_eff.tzinfo is None:
+            ts_eff = ts_eff.replace(tzinfo=UTC)
+        ym = (ts_eff.year, ts_eff.month)
+        yc, nc = bucket_counts.get(ym, (0, 0))
+        if is_yes:
+            bucket_counts[ym] = (yc + 1, nc)
+        else:
+            bucket_counts[ym] = (yc, nc + 1)
+
+    now_anchor = datetime.now(UTC)
+    months_template: list[dict] = []
+    for back in (5, 4, 3, 2, 1, 0):
+        yy, mm = _go_back_months(now_anchor.year, now_anchor.month, back)
+        yc, nc = bucket_counts.get((yy, mm), (0, 0))
+        tot = yc + nc
+        pct_m = round(100.0 * yc / tot, 1) if tot else None
+        months_template.append(
+            {
+                "year": yy,
+                "month": mm,
+                "label": MONTH_ABBREV[mm - 1],
+                "response_count": tot,
+                "yes_count": yc,
+                "csat_pct": pct_m,
+            }
+        )
+
+    period_label = (
+        f"{months_template[0]['label']} {months_template[0]['year']} – "
+        f"{months_template[-1]['label']} {months_template[-1]['year']}"
+        if months_template
+        else ""
+    )
+
+    prompt = question_key
+    ver = await session.get(SurveyVersion, survey_version_id)
+    if ver and ver.schema_snapshot:
+        for q in question_definitions_from_snapshot(ver.schema_snapshot or {}):
+            if q["question_key"] == question_key:
+                prompt = str(q.get("prompt") or question_key)
+                break
+
+    return {
+        "question_key": question_key,
+        "prompt": prompt,
+        "reporting_period_label": period_label,
+        "snapshot": {
+            "yes_count": yes_all,
+            "no_count": no_all,
+            "answered_count": answered_all,
+            "cohort_response_count": cohort_total,
+            "csat_pct": csat_pct,
+            "response_rate_pct": rr_pct,
+        },
+        "months": months_template,
+    }
 
 
 async def count_responses(session: AsyncSession, where_clause: list) -> int:
