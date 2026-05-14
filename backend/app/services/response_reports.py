@@ -218,13 +218,13 @@ async def aggregate_channel_responses(
     session: AsyncSession,
     *,
     tenant_id: UUID,
-    channel_id: UUID,
+    channel_id: UUID | None = None,
     survey_version_id: UUID | None = None,
     submitted_after=None,
     submitted_before=None,
     location_ids: list[UUID] | None = None,
 ) -> dict:
-    """Return serializable aggregate report for one channel (cohorts by survey version)."""
+    """Return cohort aggregates by survey version for one channel or tenant-wide."""
     conds = base_response_filter(
         tenant_id,
         channel_id=channel_id,
@@ -389,12 +389,50 @@ def _nps_pct_triplet(counts: dict[str, int]) -> tuple[float, float, float, int |
     return pp, ap, dp, int(round(raw_nps))
 
 
+async def _resolve_prompt_from_versions(
+    session: AsyncSession,
+    tenant_id: UUID,
+    *,
+    question_key: str,
+    preferred_version_id: UUID | None,
+    expected_question_type: str | None,
+) -> str:
+    if preferred_version_id is not None:
+        ver = await session.get(SurveyVersion, preferred_version_id)
+        if ver and ver.tenant_id == tenant_id and ver.schema_snapshot:
+            for q in question_definitions_from_snapshot(ver.schema_snapshot or {}):
+                if q["question_key"] != question_key:
+                    continue
+                if expected_question_type and q["question_type"] != expected_question_type:
+                    continue
+                return str(q.get("prompt") or question_key)
+
+    rows = list(
+        (
+            await session.scalars(
+                select(SurveyVersion)
+                .where(SurveyVersion.tenant_id == tenant_id)
+                .order_by(SurveyVersion.version_number.desc(), SurveyVersion.created_at.desc())
+            )
+        ).all()
+    )
+    for ver in rows:
+        snap = ver.schema_snapshot or {}
+        for q in question_definitions_from_snapshot(snap):
+            if q["question_key"] != question_key:
+                continue
+            if expected_question_type and q["question_type"] != expected_question_type:
+                continue
+            return str(q.get("prompt") or question_key)
+    return question_key
+
+
 async def build_nps_analytics_dashboard(
     session: AsyncSession,
     *,
     tenant_id: UUID,
-    channel_id: UUID,
-    survey_version_id: UUID,
+    channel_id: UUID | None = None,
+    survey_version_id: UUID | None = None,
     question_key: str,
     location_ids: list[UUID] | None = None,
 ) -> dict:
@@ -473,13 +511,13 @@ async def build_nps_analytics_dashboard(
         else ""
     )
 
-    prompt = question_key
-    ver = await session.get(SurveyVersion, survey_version_id)
-    if ver and ver.schema_snapshot:
-        for q in question_definitions_from_snapshot(ver.schema_snapshot or {}):
-            if q["question_key"] == question_key:
-                prompt = str(q.get("prompt") or question_key)
-                break
+    prompt = await _resolve_prompt_from_versions(
+        session,
+        tenant_id,
+        question_key=question_key,
+        preferred_version_id=survey_version_id,
+        expected_question_type=QuestionType.NPS.value,
+    )
 
     return {
         "question_key": question_key,
@@ -501,8 +539,8 @@ async def build_csat2_binary_dashboard(
     session: AsyncSession,
     *,
     tenant_id: UUID,
-    channel_id: UUID,
-    survey_version_id: UUID,
+    channel_id: UUID | None = None,
+    survey_version_id: UUID | None = None,
     question_key: str,
     location_ids: list[UUID] | None = None,
 ) -> dict:
@@ -580,13 +618,13 @@ async def build_csat2_binary_dashboard(
         else ""
     )
 
-    prompt = question_key
-    ver = await session.get(SurveyVersion, survey_version_id)
-    if ver and ver.schema_snapshot:
-        for q in question_definitions_from_snapshot(ver.schema_snapshot or {}):
-            if q["question_key"] == question_key:
-                prompt = str(q.get("prompt") or question_key)
-                break
+    prompt = await _resolve_prompt_from_versions(
+        session,
+        tenant_id,
+        question_key=question_key,
+        preferred_version_id=survey_version_id,
+        expected_question_type=QuestionType.CSAT_2.value,
+    )
 
     return {
         "question_key": question_key,

@@ -80,8 +80,8 @@ class VersionCohortAggregateRead(BaseModel):
 
 
 class ResponseAggregateReport(BaseModel):
-    channel_id: UUID
-    channel_name: str
+    channel_id: UUID | None = None
+    channel_name: str = "All channels"
     submitted_after: datetime | None = None
     submitted_before: datetime | None = None
     cohorts: list[VersionCohortAggregateRead]

@@ -29,6 +29,8 @@ dependencies = [
 [project.scripts]
 goli-feedback-worker = "app.cli.run_feedback_worker:main"
 goli-bootstrap-platform-admin = "app.cli.bootstrap_platform_admin:main"
+goli-seed-rmkv-sarees = "app.cli.seed_rmkv_sarees:main"
+goli-seed-rmkv-demo-feedback = "app.cli.seed_rmkv_demo_feedback:main"
 
 [project.optional-dependencies]
 dev = [
