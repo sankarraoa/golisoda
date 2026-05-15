@@ -71,9 +71,28 @@ Set these on the frontend service before building:
 
 After Railway creates public domains, update the API service:
 
-- `ADMIN_CORS_ORIGINS=https://<frontend-domain>`
+- `ADMIN_CORS_ORIGINS=https://<frontend-domain>` (comma-separated if the SPA is reachable on more than one origin, e.g. tenant UI + platform custom domain)
 - `PUBLIC_FEEDBACK_BASE_URL=https://<frontend-domain>`
 - `API_PUBLIC_ORIGIN=https://<api-domain>`
+
+## Platform admin URL (`/platform`)
+
+The tenant and platform UIs ship in the **same** frontend build (`/` vs `/platform`). The path
+`/platform` does not create a separate hostname by itself.
+
+To use a **different hostname** (e.g. `platform-frontend-production-…up.railway.app` or
+`platform.yourdomain.com`) while still serving this app:
+
+1. Railway → **frontend** service → **Networking** → **Custom domains** → add your domain
+   and complete DNS (CNAME / target Railway shows). Railway’s [custom domain docs](https://docs.railway.com/deploy/exposing-your-app#custom-domains)
+   apply; the app continues to resolve `/platform` on that host.
+2. Update the **API** `ADMIN_CORS_ORIGINS` to include **every** browser origin that loads the admin SPA
+   (comma-separated), including the new platform URL origin if it differs from the main frontend URL.
+3. Optional: rename the service in Railway; some setups regenerate a friendlier default
+   `*.up.railway.app` label—**custom domains** are the reliable way to get a stable `platform-…` name.
+
+A **second** frontend service (duplicate deploy) is only needed if you want a physically separate
+deployment; it is not required for a separate *URL* when one service can expose multiple domains.
 
 ## Worker Variables
 
