@@ -31,7 +31,7 @@ import {
   updateSurveyQuestion,
   patchSurveyQuestion,
 } from "../../lib/adminApi";
-import { getTemplateCatalogSummaryLines } from "../../lib/templateCatalogSummary";
+import { getTemplateCatalogDisplayName, getTemplateCatalogSummaryLines } from "../../lib/templateCatalogSummary";
 import type {
   Channel,
   DashboardData,
@@ -1248,7 +1248,7 @@ function CreateChannelModal({
         >
           {dashboardData.surveyTemplates.map((template) => (
             <option key={template.id} value={template.id}>
-              {template.name}
+              {getTemplateCatalogDisplayName(template)}
             </option>
           ))}
         </select>
@@ -1621,9 +1621,8 @@ function publicFeedbackAbsoluteUrl(channelCode: string): string {
 }
 
 function templateLabelForChannel(dashboardData: DashboardData, templateId: string): string {
-  return (
-    dashboardData.surveyTemplates.find((template) => template.id === templateId)?.name ?? "—"
-  );
+  const template = dashboardData.surveyTemplates.find((t) => t.id === templateId);
+  return template ? getTemplateCatalogDisplayName(template) : "—";
 }
 
 function channelSearchValues(dashboardData: DashboardData, channel: Channel): Array<string | null | undefined> {
@@ -2123,7 +2122,7 @@ function SurveyBuilderModal({
                   >
                     {surveyTemplates.map((template) => (
                       <option key={template.id} value={template.id}>
-                        {template.name}
+                        {getTemplateCatalogDisplayName(template)}
                       </option>
                     ))}
                   </select>
@@ -4291,6 +4290,8 @@ function TemplateLibrarySection({
   } as CSSProperties;
 
   const [previewSummary1, previewSummary2] = getTemplateCatalogSummaryLines(selected);
+  const selectedDescription = selected.description?.trim() ?? "";
+  const selectedDeployNotes = selected.deployment_notes?.trim() ?? "";
 
   return (
     <div className="templates-library">
@@ -4298,7 +4299,9 @@ function TemplateLibrarySection({
         <div className="templates-library-catalog">
           <div className="template-gallery" role="list">
             {templates.map((template) => {
+              const displayName = getTemplateCatalogDisplayName(template);
               const [summaryLine1, summaryLine2] = getTemplateCatalogSummaryLines(template);
+              const cardDescription = template.description?.trim();
               return (
               <button
                 key={template.id}
@@ -4309,11 +4312,17 @@ function TemplateLibrarySection({
                 }`}
                 onClick={() => setSelectedId(template.id)}
               >
-                <div className="template-gallery-card-title">{template.name}</div>
-                <p className="template-gallery-card-desc template-gallery-card-desc--catalog">
-                  <span className="template-gallery-card-desc-line">{summaryLine1}</span>
-                  <span className="template-gallery-card-desc-line">{summaryLine2}</span>
-                </p>
+                <div className="template-gallery-card-title">{displayName}</div>
+                {cardDescription ? (
+                  <p className="template-gallery-card-desc template-gallery-card-desc--from-db" title={cardDescription}>
+                    {cardDescription}
+                  </p>
+                ) : (
+                  <p className="template-gallery-card-desc template-gallery-card-desc--catalog">
+                    <span className="template-gallery-card-desc-line">{summaryLine1}</span>
+                    <span className="template-gallery-card-desc-line">{summaryLine2}</span>
+                  </p>
+                )}
               </button>
               );
             })}
@@ -4322,11 +4331,31 @@ function TemplateLibrarySection({
         <div className="templates-library-preview">
           <header className="template-preview-panel-header">
             <span className="template-preview-badge">Preview</span>
-            <h3 className="template-preview-panel-title">{selected.name}</h3>
-            <p className="template-preview-panel-desc template-preview-panel-desc--compact">
-              <span className="template-gallery-card-desc-line">{previewSummary1}</span>
-              <span className="template-gallery-card-desc-line">{previewSummary2}</span>
-            </p>
+            <h3 className="template-preview-panel-title">{getTemplateCatalogDisplayName(selected)}</h3>
+            {selectedDescription ? (
+              <>
+                <p className="template-preview-panel-official-desc">{selectedDescription}</p>
+                {selectedDeployNotes ? (
+                  <p className="template-preview-panel-deploy-notes">
+                    <span className="template-preview-panel-notes-label">Deployment</span>
+                    {selectedDeployNotes}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <p className="template-preview-panel-desc template-preview-panel-desc--compact">
+                  <span className="template-gallery-card-desc-line">{previewSummary1}</span>
+                  <span className="template-gallery-card-desc-line">{previewSummary2}</span>
+                </p>
+                {selectedDeployNotes ? (
+                  <p className="template-preview-panel-deploy-notes">
+                    <span className="template-preview-panel-notes-label">Deployment</span>
+                    {selectedDeployNotes}
+                  </p>
+                ) : null}
+              </>
+            )}
           </header>
           <div className="template-gallery-preview-wrap template-gallery-preview-host" style={hostStyle}>
             <FeedbackFlow

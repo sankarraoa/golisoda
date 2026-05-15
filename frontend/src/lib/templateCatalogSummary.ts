@@ -2,6 +2,16 @@ import type { SurveyTemplate } from "../types/admin";
 import { canonicalTemplateSlug } from "./templateSlug";
 import { normalizeSurveyPresentation, type SurveyPresentationInput } from "../types/surveyPresentation";
 
+/** Admin UI titles per slug — stable even if the DB `name` drifts or uses alternate punctuation. */
+const DISPLAY_NAME_BY_SLUG: Record<string, string> = {
+  default_stepper: "Stepper (default)",
+  single_page: "Single page",
+  kiosk_touch: "Kiosk / touch",
+  heritage_immersive: "Heritage immersive",
+  heritage_luxury: "Heritage luxury (dual)",
+  phone_portrait: "Phone (portrait)",
+};
+
 /** Fixed catalog copy so list rows stay short even when DB descriptions are long. */
 const SUMMARY_BY_SLUG: Record<string, readonly [string, string]> = {
   default_stepper: [
@@ -50,4 +60,14 @@ export function getTemplateCatalogSummaryLines(template: SurveyTemplate): readon
     return fromSlug;
   }
   return fallbackSummary(template.presentation ?? {});
+}
+
+/** Title shown in Templates gallery cards and preview header. */
+export function getTemplateCatalogDisplayName(template: SurveyTemplate): string {
+  const key = canonicalTemplateSlug(template.slug);
+  const fixed = DISPLAY_NAME_BY_SLUG[key];
+  if (fixed) {
+    return fixed;
+  }
+  return template.name.trim() || template.slug;
 }
