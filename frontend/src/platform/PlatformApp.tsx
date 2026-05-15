@@ -1,12 +1,20 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
-import type { MeResponse } from "../types/admin";
+import type { MeResponse, SurveyTemplate } from "../types/admin";
+import type { PublicBranding } from "../types/publicFeedback";
+
+import { TemplateLibrarySection } from "../components/admin/TemplateLibrarySection";
 import {
   clearPlatformTokens,
   createPlatformSuperAdmin,
   createPlatformTenant,
+  deletePlatformSurveyTemplate,
+  exportPlatformSurveyTemplatePack,
+  getPlatformApiBase,
   getStoredPlatformAccessToken,
+  importPlatformSurveyTemplatePack,
   listPlatformSuperAdmins,
+  listPlatformSurveyTemplates,
   listPlatformTenants,
   patchPlatformSuperAdminUser,
   patchPlatformTenant,
@@ -25,7 +33,7 @@ import {
 
 import { PlatformLoginPage } from "./PlatformLoginPage";
 
-type PlatformSection = "users" | "tenants";
+type PlatformSection = "users" | "tenants" | "templates";
 
 function formatTs(iso: string): string {
   try {
@@ -78,7 +86,7 @@ function PlatformShell({ onSignedOut }: { onSignedOut: () => void }) {
     PLATFORM_SIDEBAR_STORAGE_KEY,
   );
 
-  const token = useMemo(() => getStoredPlatformAccessToken(), []);
+  const token = getStoredPlatformAccessToken();
 
   useEffect(() => {
     let mounted = true;
@@ -153,6 +161,17 @@ function PlatformShell({ onSignedOut }: { onSignedOut: () => void }) {
             </span>
             <span className="nav-item-label">Tenants</span>
           </button>
+          <button
+            className={`nav-item${section === "templates" ? " active" : ""}`}
+            onClick={() => setSection("templates")}
+            type="button"
+            title={sidebarCollapsed ? "Templates" : undefined}
+          >
+            <span className="material-symbols-outlined" aria-hidden>
+              view_quilt
+            </span>
+            <span className="nav-item-label">Templates</span>
+          </button>
           <div className="nav-section-label">Settings</div>
           <button
             className={`nav-item${section === "users" ? " active" : ""}`}
@@ -186,11 +205,19 @@ function PlatformShell({ onSignedOut }: { onSignedOut: () => void }) {
       </aside>
       <main className="main-panel">
         <header className="main-header">
-          <h1 className="main-title">{section === "tenants" ? "Tenants" : "Users"}</h1>
+          <h1 className="main-title">
+            {section === "tenants"
+              ? "Tenants"
+              : section === "users"
+                ? "Users"
+                : "Templates"}
+          </h1>
           <p className="main-subtitle muted">
             {section === "tenants"
               ? "Create organizations and designate a tenant administrator."
-              : "Super administrators for this platform console. Deactivated users cannot sign in here or to tenant dashboards with this account."}
+              : section === "users"
+                ? "Super administrators for this platform console. Deactivated users cannot sign in here or to tenant dashboards with this account."
+                : "Browse the global survey template catalog and preview how each layout renders with sample questions."}
           </p>
         </header>
         {loading ? <p className="muted">Loading…</p> : null}
@@ -199,7 +226,146 @@ function PlatformShell({ onSignedOut }: { onSignedOut: () => void }) {
           <PlatformUsersPanel token={token!} currentUserId={me?.user_id ?? null} />
         ) : null}
         {!loading && !error && section === "tenants" ? <PlatformTenantsPanel token={token!} /> : null}
+        {!loading && !error && section === "templates" ? <PlatformTemplatesPanel token={token!} /> : null}
       </main>
+    </div>
+  );
+}
+
+const PLATFORM_TEMPLATE_PREVIEW_BRANDING: PublicBranding = {
+  logo_url: null,
+  primary_color: "#1a73e8",
+  secondary_color: "#e8f0fe",
+  thank_you_text: "Thank you for your feedback!",
+};
+
+function PlatformTemplatesPanel({ token }: { token: string }) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [templates, setTemplates] = useState<SurveyTemplate[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [importHint, setImportHint] = useState<string | null>(null);
+  const [busy, setBusy] = useState(true);
+
+  async function refresh() {
+    setLoadError(null);
+    setBusy(true);
+    try {
+      setTemplates(await listPlatformSurveyTemplates(token));
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Unable to load templates.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, [token]);
+
+  async function exportPack(t: SurveyTemplate) {
+    setImportHint(null);
+    try {
+      const blob = await exportPlatformSurveyTemplatePack(token, t.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `template-${t.slug}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setImportHint(e instanceof Error ? e.message : "Export failed.");
+    }
+  }
+
+  async function onImportPick(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) {
+      return;
+    }
+    setImportHint(null);
+    try {
+      await importPlatformSurveyTemplatePack(token, file);
+      setImportHint(`Imported “${file.name}”. Refresh the list if you don’t see it.`);
+      await refresh();
+    } catch (e) {
+      setImportHint(e instanceof Error ? e.message : "Import failed.");
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }
+
+  async function deleteSelected(t: SurveyTemplate) {
+    setImportHint(null);
+    try {
+      await deletePlatformSurveyTemplate(token, t.id);
+      setImportHint("Template deleted.");
+      await refresh();
+    } catch (e) {
+      setImportHint(e instanceof Error ? e.message : "Delete failed.");
+    }
+  }
+
+  if (busy) {
+    return <p className="muted">Loading templates…</p>;
+  }
+  if (loadError) {
+    return <div className="field-error-msg">{loadError}</div>;
+  }
+
+  const toolbar = (
+    <div className="platform-templates-toolbar">
+      <button type="button" className="btn btn--secondary" onClick={() => fileInputRef.current?.click()}>
+        Import template ZIP
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".zip,application/zip"
+        hidden
+        onChange={(event) => void onImportPick(event.target.files)}
+      />
+      {importHint ? (
+        <span
+          className={
+            importHint.startsWith("Imported") || importHint.startsWith("Template deleted")
+              ? "muted"
+              : "field-error-msg"
+          }
+          role="status"
+        >
+          {importHint}
+        </span>
+      ) : null}
+    </div>
+  );
+
+  if (templates.length === 0) {
+    return (
+      <div className="section-stack templates-view">
+        {toolbar}
+        <div className="empty-state">
+          <h3 className="empty-state-title">No templates in the catalog</h3>
+          <p className="empty-state-body">
+            Import a template package (ZIP) or provision templates via migrations. Packages include{" "}
+            <code className="inline-code">template.json</code> and an optional <code className="inline-code">assets/</code>{" "}
+            folder for CSS and images—see <code className="inline-code">README.txt</code> inside exports.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="section-stack templates-view">
+      {toolbar}
+      <TemplateLibrarySection
+        brandingPreview={PLATFORM_TEMPLATE_PREVIEW_BRANDING}
+        templateAssetsApiOrigin={getPlatformApiBase()}
+        templates={templates}
+        onDeleteTemplate={deleteSelected}
+        onExportTemplate={exportPack}
+      />
     </div>
   );
 }

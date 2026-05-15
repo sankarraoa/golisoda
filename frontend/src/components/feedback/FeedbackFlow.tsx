@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { FormEvent, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 
 import type {
   AnswerValue,
@@ -9,7 +9,9 @@ import type {
 } from "../../types/publicFeedback";
 import { formatPublicOrganizationAddressLines } from "../../types/publicFeedback";
 import type { SurveyPresentation } from "../../types/surveyPresentation";
-import { canonicalTemplateSlug } from "../../lib/templateSlug";
+import { resolveImmersiveHeroImageUrls } from "../../lib/heritageImmersiveHeroUrls";
+import { canonicalTemplateSlug, isHeritageImmersiveFamilySlug } from "../../lib/templateSlug";
+import { getPublicFeedbackApiBase } from "../../lib/publicFeedbackApi";
 import { FeedbackHeader, FeedbackProgress, FeedbackShell } from "./FeedbackShell";
 import { QuestionRenderer, validateQuestionAnswer } from "./QuestionRenderer";
 
@@ -53,6 +55,7 @@ export function FeedbackFlow({
   disableStepBack = false,
   surveyDescription = null,
   theme = {},
+  templateId,
 }: {
   templateSlug: string;
   presentation: SurveyPresentation;
@@ -71,6 +74,8 @@ export function FeedbackFlow({
   /** Survey description: `heritage_immersive` ornamental tagline; `heritage_luxury` (jewelry card) italic closing under Submit. */
   surveyDescription?: string | null;
   theme?: Record<string, string>;
+  /** Survey template row id — used to resolve `package.immersive.hero_asset_paths` under `/public/template-assets/{id}/`. */
+  templateId?: string;
 }) {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
@@ -81,8 +86,62 @@ export function FeedbackFlow({
   const sortedQuestions = [...questions].sort((a, b) => a.sort_order - b.sort_order);
   const currentQuestion = sortedQuestions[questionIndex];
   const templateKey = canonicalTemplateSlug(templateSlug);
+  const heritageImmersiveFamily = isHeritageImmersiveFamilySlug(templateSlug);
+  const flowLayout: "stepper" | "single_page" = heritageImmersiveFamily ? "stepper" : layout;
+  const flowPresentation: SurveyPresentation =
+    heritageImmersiveFamily
+      ? {
+          ...presentation,
+          layout: "stepper",
+          progress: { ...presentation.progress, style: "dots" },
+        }
+      : presentation;
+  const heroUrlPool = useMemo(
+    () =>
+      resolveImmersiveHeroImageUrls(templateId, getPublicFeedbackApiBase(), flowPresentation.package?.immersive),
+    [templateId, flowPresentation.package?.immersive],
+  );
+  const heritageImmersiveMiddleClass =
+    flowPresentation.package?.immersive?.hero_column === "start"
+      ? "heritage-immersive-middle heritage-immersive-middle--hero-start"
+      : "heritage-immersive-middle";
+  const heritageQuestionSignature = useMemo(
+    () =>
+      [...questions]
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((q) => q.question_key)
+        .join("\0"),
+    [questions],
+  );
+  const heritageImmersiveHeroPick = useMemo(() => {
+    if (!heritageImmersiveFamily) {
+      return { perStep: null as string[] | null, single: null as string | null };
+    }
+    const pool = heroUrlPool;
+    const n = pool.length;
+    const len = sortedQuestions.length;
+    if (len === 0) {
+      return { perStep: null, single: pool[0] };
+    }
+    if (flowLayout === "stepper") {
+      return {
+        perStep: Array.from({ length: len }, () => pool[Math.floor(Math.random() * n)]),
+        single: null,
+      };
+    }
+    return {
+      perStep: null,
+      single: pool[Math.floor(Math.random() * n)],
+    };
+  }, [heritageImmersiveFamily, heroUrlPool, flowLayout, heritageQuestionSignature, sortedQuestions.length]);
+  const heritageImmersiveHeroSrc =
+    flowLayout === "stepper"
+      ? (heritageImmersiveHeroPick.perStep?.[questionIndex] ??
+          heritageImmersiveHeroPick.perStep?.[0] ??
+          heroUrlPool[0])
+      : (heritageImmersiveHeroPick.single ?? heroUrlPool[0]);
   const isPreview = onSubmitAnswers === null || channelCode === null;
-  const isLastQuestion = layout === "stepper" && questionIndex === sortedQuestions.length - 1;
+  const isLastQuestion = flowLayout === "stepper" && questionIndex === sortedQuestions.length - 1;
 
   function updateAnswer(questionKey: string, value: AnswerValue) {
     setAnswers((currentAnswers) => ({ ...currentAnswers, [questionKey]: value }));
@@ -90,7 +149,7 @@ export function FeedbackFlow({
   }
 
   useEffect(() => {
-    if (layout !== "stepper" || !presentation.navigation.auto_advance || !currentQuestion) {
+    if (flowLayout !== "stepper" || !presentation.navigation.auto_advance || !currentQuestion) {
       return;
     }
     const val = answers[currentQuestion.question_key];
@@ -103,12 +162,12 @@ export function FeedbackFlow({
       setFieldError(null);
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [answers, currentQuestion, layout, presentation.navigation.auto_advance, questionIndex, sortedQuestions.length]);
+  }, [answers, currentQuestion, flowLayout, presentation.navigation.auto_advance, questionIndex, sortedQuestions.length]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (layout === "single_page") {
+    if (flowLayout === "single_page") {
       for (const q of sortedQuestions) {
         const err = validateQuestionAnswer(q, answers[q.question_key]);
         if (err) {
@@ -185,13 +244,13 @@ export function FeedbackFlow({
   }
 
   const progressNode =
-    layout === "stepper" ? (
+    flowLayout === "stepper" ? (
       <FeedbackProgress
-        presentation={presentation}
+        presentation={flowPresentation}
         questionIndex={questionIndex}
         totalQuestions={sortedQuestions.length}
       />
-    ) : presentation.progress.style !== "none" ? (
+    ) : flowPresentation.progress.style !== "none" ? (
       <div className="public-progress">
         <div className="public-progress-value" style={{ width: "100%" } as CSSProperties} />
       </div>
@@ -199,14 +258,11 @@ export function FeedbackFlow({
 
   const kioskSubmitPhrase = templateKey === "kiosk_touch" ? "Submit Feedback" : "Submit";
 
-  const heritageFooterTagline =
-    surveyDescription?.trim() || "Your feedback helps us serve you better.";
-
   const heritageLuxuryClosing = surveyDescription?.trim() || "Thank you!";
 
   const footerSubmitLabel = isSubmitting
     ? "Submitting"
-    : layout === "single_page"
+    : flowLayout === "single_page"
       ? onSubmitAnswers
         ? kioskSubmitPhrase
         : "Preview"
@@ -217,9 +273,9 @@ export function FeedbackFlow({
           : "Next";
 
   const backButton =
-    layout === "stepper" && questionIndex > 0 && !disableStepBack ? (
+    flowLayout === "stepper" && questionIndex > 0 && !disableStepBack ? (
       <button
-        className="btn btn--ghost"
+        className="btn btn--ghost heritage-immersive-back"
         type="button"
         onClick={() => {
           setQuestionIndex((currentIndex) => currentIndex - 1);
@@ -230,33 +286,33 @@ export function FeedbackFlow({
       </button>
     ) : null;
 
+  const orgAddressLines = formatPublicOrganizationAddressLines(organization);
+
+  const progressForShell = heritageImmersiveFamily ? null : progressNode;
+
   const footer =
-    templateKey === "heritage_immersive" ? (
-      <>
-        <footer className="public-footer public-footer--heritage">
-          <div className="heritage-footer-inner">
-            <div className="heritage-footer-tagline-wrap">
-              <p className="heritage-footer-tagline">{heritageFooterTagline}</p>
-            </div>
-            {previewBadge ? (
-              <div className="heritage-footer-preview">
-                <span className="text-secondary text-sm">{previewBadge}</span>
-              </div>
-            ) : null}
-            <div className="heritage-footer-btn-row">
-              {backButton}
-              <button
-                className={`btn btn--tenant heritage-footer-submit${backButton ? "" : " heritage-footer-submit--solo"}`}
-                disabled={isSubmitting || sortedQuestions.length === 0}
-                type="submit"
-              >
-                {footerSubmitLabel}
-              </button>
-            </div>
+    heritageImmersiveFamily ? (
+      <footer className="public-footer heritage-immersive-footer">
+        <div className="heritage-immersive-footer-actions">
+          <div className="heritage-immersive-footer-start">
+            {backButton ?? <span className="heritage-immersive-footer-slot" aria-hidden />}
           </div>
-        </footer>
-        <div className="heritage-floor" aria-hidden />
-      </>
+          <div className="heritage-immersive-footer-center">
+            {previewBadge ? (
+              <span className="heritage-immersive-preview-badge text-secondary text-sm">{previewBadge}</span>
+            ) : null}
+          </div>
+          <div className="heritage-immersive-footer-end">
+            <button
+              className="btn btn--tenant heritage-immersive-submit"
+              disabled={isSubmitting || sortedQuestions.length === 0}
+              type="submit"
+            >
+              {footerSubmitLabel}
+            </button>
+          </div>
+        </div>
+      </footer>
     ) : templateKey === "heritage_luxury" ? (
       <footer className="public-footer public-footer--jewelry-card">
         {previewBadge ? (
@@ -293,31 +349,114 @@ export function FeedbackFlow({
     );
 
   let mainBody: ReactNode;
-  if (layout === "single_page") {
-    mainBody = (
-      <main className="public-body public-body--single-page">
-        {sortedQuestions.map((question, index) => (
-          <section className="feedback-section" key={question.question_key} id={`section-${question.question_key}`}>
-            <p className="question-kicker">
-              Question {index + 1} of {sortedQuestions.length}
-            </p>
-            <h2 className="question-title" id={`q-${question.question_key}`}>
-              {question.prompt}
-            </h2>
-            {question.help_text ? <p className="question-help">{question.help_text}</p> : null}
-            <div className="answer-area">
-              <QuestionRenderer
-                presentation={presentation}
-                question={question}
-                value={answers[question.question_key]}
-                onChange={(value) => updateAnswer(question.question_key, value)}
-                theme={theme}
-              />
+  if (flowLayout === "single_page") {
+    if (heritageImmersiveFamily) {
+      mainBody = (
+        <div className={heritageImmersiveMiddleClass}>
+          <div className="heritage-immersive-question-col">
+            <div className="heritage-immersive-question-scroll public-body public-body--single-page">
+              <p className="heritage-immersive-context-line">{locationName}</p>
+              <h1 className="heritage-immersive-survey-title">{surveyTitle}</h1>
+              {sortedQuestions.map((question, index) => (
+                <section className="feedback-section" key={question.question_key} id={`section-${question.question_key}`}>
+                  <h2 className="question-title" id={`q-${question.question_key}`}>
+                    {question.prompt}
+                  </h2>
+                  {question.help_text ? <p className="question-help">{question.help_text}</p> : null}
+                  <div className="answer-area">
+                    <QuestionRenderer
+                      presentation={flowPresentation}
+                      question={question}
+                      value={answers[question.question_key]}
+                      onChange={(value) => updateAnswer(question.question_key, value)}
+                      theme={theme}
+                    />
+                  </div>
+                </section>
+              ))}
+              {fieldError ? <div className="public-error">{fieldError}</div> : null}
             </div>
-          </section>
-        ))}
-        {fieldError ? <div className="public-error">{fieldError}</div> : null}
-      </main>
+          </div>
+          <aside className="heritage-immersive-hero-col" aria-hidden="true">
+            <img
+              alt=""
+              className="heritage-immersive-hero-img"
+              decoding="async"
+              key={heritageImmersiveHeroSrc}
+              src={heritageImmersiveHeroSrc}
+            />
+          </aside>
+        </div>
+      );
+    } else {
+      mainBody = (
+        <main className="public-body public-body--single-page">
+          {sortedQuestions.map((question, index) => (
+            <section className="feedback-section" key={question.question_key} id={`section-${question.question_key}`}>
+              <p className="question-kicker">
+                Question {index + 1} of {sortedQuestions.length}
+              </p>
+              <h2 className="question-title" id={`q-${question.question_key}`}>
+                {question.prompt}
+              </h2>
+              {question.help_text ? <p className="question-help">{question.help_text}</p> : null}
+              <div className="answer-area">
+                <QuestionRenderer
+                  presentation={flowPresentation}
+                  question={question}
+                  value={answers[question.question_key]}
+                  onChange={(value) => updateAnswer(question.question_key, value)}
+                  theme={theme}
+                />
+              </div>
+            </section>
+          ))}
+          {fieldError ? <div className="public-error">{fieldError}</div> : null}
+        </main>
+      );
+    }
+  } else if (heritageImmersiveFamily) {
+    mainBody = (
+      <div className={heritageImmersiveMiddleClass}>
+        <div className="heritage-immersive-question-col">
+          <div className="heritage-immersive-question-inner public-body">
+            <FeedbackProgress
+              presentation={flowPresentation}
+              questionIndex={questionIndex}
+              totalQuestions={sortedQuestions.length}
+            />
+            <p className="heritage-immersive-context-line">{locationName}</p>
+            <h1 className="heritage-immersive-survey-title">{surveyTitle}</h1>
+            {currentQuestion ? (
+              <>
+                <h2 className="question-title" id={`q-${currentQuestion.question_key}`}>
+                  {currentQuestion.prompt}
+                </h2>
+                {currentQuestion.help_text ? <p className="question-help">{currentQuestion.help_text}</p> : null}
+                <div className="answer-area">
+                  <QuestionRenderer
+                    presentation={flowPresentation}
+                    question={currentQuestion}
+                    value={answers[currentQuestion.question_key]}
+                    onChange={(value) => updateAnswer(currentQuestion.question_key, value)}
+                    theme={theme}
+                  />
+                  {fieldError ? <div className="public-error">{fieldError}</div> : null}
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
+        <aside className="heritage-immersive-hero-col" aria-hidden="true">
+          <img
+            alt=""
+            className="heritage-immersive-hero-img"
+            decoding="async"
+            key={heritageImmersiveHeroSrc}
+            src={heritageImmersiveHeroSrc}
+          />
+        </aside>
+      </div>
     );
   } else {
     mainBody = (
@@ -330,12 +469,10 @@ export function FeedbackFlow({
             <h2 className="question-title" id={`q-${currentQuestion.question_key}`}>
               {currentQuestion.prompt}
             </h2>
-            {currentQuestion.help_text ? (
-              <p className="question-help">{currentQuestion.help_text}</p>
-            ) : null}
+            {currentQuestion.help_text ? <p className="question-help">{currentQuestion.help_text}</p> : null}
             <div className="answer-area">
               <QuestionRenderer
-                presentation={presentation}
+                presentation={flowPresentation}
                 question={currentQuestion}
                 value={answers[currentQuestion.question_key]}
                 onChange={(value) => updateAnswer(currentQuestion.question_key, value)}
@@ -350,37 +487,30 @@ export function FeedbackFlow({
   }
 
   const headerNode =
-    templateKey === "heritage_immersive" ? (
-      <>
-        <div className="heritage-hero">
-          <div className="heritage-maroon-crown">
-            <div className="heritage-motif-row">
-              <span className="heritage-diya heritage-diya--left" aria-hidden />
-              {branding.logo_url ? (
-                <img alt="" className="heritage-hero-logo" src={branding.logo_url} />
-              ) : (
-                <span className="heritage-motif-center" aria-hidden>
-                  🛕
-                </span>
-              )}
-              <span className="heritage-diya heritage-diya--right" aria-hidden />
-            </div>
-          </div>
+    heritageImmersiveFamily ? (
+      <header className="heritage-immersive-topbar">
+        <div className="heritage-immersive-brand">
+          <TenantLogoFeedback branding={branding} surveyTitle={surveyTitle} />
         </div>
-        <FeedbackHeader
-          logo={null}
-          subtitle={locationName}
-          title={surveyTitle}
-        />
-      </>
+        <div className="heritage-immersive-address">
+          {orgAddressLines.length > 0 ? (
+            orgAddressLines.map((line, index) => (
+              <div className="heritage-immersive-address-line" key={`${index}-${line}`}>
+                {line}
+              </div>
+            ))
+          ) : (
+            <div className="heritage-immersive-address-line heritage-immersive-address-fallback">{locationName}</div>
+          )}
+        </div>
+      </header>
     ) : templateKey === "heritage_luxury" ? (
       (() => {
-        const orgLines = formatPublicOrganizationAddressLines(organization);
         const displayName = organization.name?.trim() || surveyTitle;
         const subtitleNode =
-          orgLines.length > 0 ? (
+          orgAddressLines.length > 0 ? (
             <div className="jewelry-org-address">
-              {orgLines.map((line, index) => (
+              {orgAddressLines.map((line, index) => (
                 <div className="jewelry-org-address-line" key={`${index}-${line}`}>
                   {line}
                 </div>
@@ -413,11 +543,13 @@ export function FeedbackFlow({
 
   return (
     <FeedbackShell
+      branding={branding}
       footer={footer}
       header={headerNode}
-      presentation={presentation}
-      progress={progressNode}
+      presentation={flowPresentation}
+      progress={progressForShell}
       templateSlug={templateSlug}
+      theme={theme}
       onSubmit={handleSubmit}
     >
       {mainBody}

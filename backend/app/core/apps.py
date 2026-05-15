@@ -19,6 +19,7 @@ from app.api.responses import router as responses_router
 from app.api.survey_templates import router as survey_templates_router
 from app.api.surveys import router as surveys_router
 from app.api.tenants import router as tenants_router
+from app.api.template_assets import router as template_assets_router
 from app.api.uploads import router as uploads_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -52,6 +53,7 @@ def create_public_feedback_app() -> FastAPI:
     app = FastAPI(title=f"{settings.app_name} · Public Feedback")
     _core_stack(app)
     app.include_router(public_router)
+    app.include_router(template_assets_router)
     app.include_router(health_router)
     _instrument(app)
     return app
@@ -89,6 +91,7 @@ def create_tenant_admin_app() -> FastAPI:
     app.include_router(responses_router)
     app.include_router(survey_templates_router)
     app.include_router(public_router)
+    app.include_router(template_assets_router)
     app.include_router(health_router)
     _instrument(app)
     return app
@@ -108,6 +111,7 @@ def create_platform_admin_app() -> FastAPI:
     _core_stack(app)
     app.include_router(platform_admin_auth_router)
     app.include_router(platform_admin_router)
+    app.include_router(template_assets_router)
     app.include_router(health_router)
     _instrument(app)
     return app
@@ -128,6 +132,7 @@ def create_monolith_app() -> FastAPI:
     app.include_router(responses_router)
     app.include_router(platform_admin_router)
     app.include_router(public_router)
+    app.include_router(template_assets_router)
     app.include_router(health_router)
     _instrument(app)
     return app

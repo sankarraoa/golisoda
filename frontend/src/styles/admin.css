@@ -1046,6 +1046,35 @@ tbody tr:hover .channel-row-actions,
   margin-bottom: 16px;
 }
 
+.template-preview-panel-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.template-preview-panel-header-row .template-preview-badge {
+  margin-bottom: 0;
+}
+
+.template-pack-download {
+  flex-shrink: 0;
+}
+
+.template-preview-panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.template-pack-delete {
+  flex-shrink: 0;
+}
+
 .template-preview-badge {
   display: block;
   width: fit-content;
@@ -2548,6 +2577,19 @@ tbody tr:hover .row-actions {
 
 .app-shell--platform .logo-dot--platform {
   background: linear-gradient(145deg, #a78bfa 0%, #7c3aed 100%);
+}
+
+.platform-templates-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.platform-templates-toolbar .field-error-msg,
+.platform-templates-toolbar .muted {
+  margin: 0;
 }
 
 .sidebar--platform {

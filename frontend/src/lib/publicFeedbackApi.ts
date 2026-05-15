@@ -18,6 +18,11 @@ function publicFeedbackApiBase(): string {
   );
 }
 
+/** Origin that serves `/f/...` and `/public/template-assets/...` (often same as tenant API). */
+export function getPublicFeedbackApiBase(): string {
+  return publicFeedbackApiBase();
+}
+
 export async function fetchPublicFeedbackContext(
   channelCode: string,
 ): Promise<PublicFeedbackContext> {

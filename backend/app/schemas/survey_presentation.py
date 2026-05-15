@@ -38,6 +38,29 @@ class TouchBlock(BaseModel):
     large_targets: bool = False
 
 
+class ImmersiveChromePackage(BaseModel):
+    """Optional chrome options for slug family ``heritage_immersive*`` (split question + hero column).
+
+    ``hero_asset_paths`` are relative to the imported template's asset root; the SPA resolves them as
+    ``GET /public/template-assets/{template_id}/{path}``. When empty, stock ``/feedback-theme/heritage-immersive-hero-*.png`` URLs are used.
+    """
+
+    hero_column: Literal["start", "end"] = "end"
+    hero_asset_paths: list[str] = Field(default_factory=list)
+
+
+class TemplatePackagePresentation(BaseModel):
+    """Designer-imported static assets (ZIP `assets/`). Paths are relative to the template root.
+
+    Stylesheets are loaded by the feedback SPA as
+    ``{publicApi}/public/template-assets/{template_id}/{path}``. Use ``url(./image.png)``
+    inside CSS so relative URLs resolve next to the stylesheet.
+    """
+
+    stylesheets: list[str] = Field(default_factory=list)
+    immersive: ImmersiveChromePackage | None = None
+
+
 class SurveyPresentationConfig(BaseModel):
     layout: Literal["stepper", "single_page"] = "stepper"
     nps: NpsPresentationBlock = Field(default_factory=NpsPresentationBlock)
@@ -47,6 +70,7 @@ class SurveyPresentationConfig(BaseModel):
     progress: ProgressBlock = Field(default_factory=ProgressBlock)
     navigation: NavigationBlock = Field(default_factory=NavigationBlock)
     touch: TouchBlock = Field(default_factory=TouchBlock)
+    package: TemplatePackagePresentation | None = None
 
     @model_validator(mode="before")
     @classmethod

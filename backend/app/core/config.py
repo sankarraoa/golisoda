@@ -67,6 +67,22 @@ class Settings(BaseSettings):
     #: On-disk tenant logo storage (JPEG/PNG/WebP copied locally from upload or remote URL).
     tenant_branding_storage_path: Path = BACKEND_DIR / "data" / "tenant_branding"
 
+    #: On-disk files for survey templates imported via platform ZIP (`assets/` subtree).
+    template_pack_storage_path: Path = Field(
+        default=BACKEND_DIR / "data" / "template_packs",
+        validation_alias=AliasChoices("TEMPLATE_PACK_STORAGE_PATH", "template_pack_storage_path"),
+    )
+
+    #: Monorepo ``frontend/`` root for including SPA CSS/images in template ZIP exports.
+    #: When unset, export uses ``../frontend`` relative to the backend package if that path exists.
+    template_export_frontend_root: Path | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "TEMPLATE_EXPORT_FRONTEND_ROOT",
+            "template_export_frontend_root",
+        ),
+    )
+
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",
         env_file_encoding="utf-8",

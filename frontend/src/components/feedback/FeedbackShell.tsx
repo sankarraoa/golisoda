@@ -1,6 +1,9 @@
 import type { CSSProperties, FormEvent, ReactNode } from "react";
+import { useLayoutEffect, useRef } from "react";
 
-import { canonicalTemplateSlug } from "../../lib/templateSlug";
+import { applyBrandingCss, applyTheme } from "../../feedback/theme/applyTheme";
+import type { PublicBranding } from "../../types/publicFeedback";
+import { canonicalTemplateSlug, isHeritageImmersiveFamilySlug } from "../../lib/templateSlug";
 import type { SurveyPresentation } from "../../types/surveyPresentation";
 
 export function FeedbackProgress({
@@ -49,6 +52,8 @@ export function FeedbackShell({
   children,
   footer,
   onSubmit,
+  theme = {},
+  branding,
 }: {
   templateSlug: string;
   presentation: SurveyPresentation;
@@ -57,13 +62,31 @@ export function FeedbackShell({
   children: ReactNode;
   footer: ReactNode;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  theme?: Record<string, string>;
+  branding?: Pick<PublicBranding, "primary_color" | "secondary_color">;
 }) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const shellClass = [
     "public-shell",
     presentation.touch.large_targets ? "public-shell--large-targets" : "",
   ]
     .filter(Boolean)
     .join(" ");
+
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) {
+      return;
+    }
+    applyTheme(theme, el);
+    applyBrandingCss(
+      branding ?? { primary_color: null, secondary_color: null },
+      el,
+    );
+    return () => {
+      el.style.cssText = "";
+    };
+  }, [branding, theme]);
 
   const formBody = (
     <>
@@ -74,15 +97,20 @@ export function FeedbackShell({
     </>
   );
 
-  const isJewelryCardLayout = canonicalTemplateSlug(templateSlug) === "heritage_luxury";
+  const slug = canonicalTemplateSlug(templateSlug);
+  const isJewelryCardLayout = slug === "heritage_luxury";
+  const isHeritageImmersive = isHeritageImmersiveFamilySlug(templateSlug);
+  const cardClass = ["public-card", isJewelryCardLayout ? "jewelry-card-form" : "", isHeritageImmersive ? "heritage-immersive-card" : ""]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div className={shellClass} data-template={canonicalTemplateSlug(templateSlug)}>
+    <div ref={rootRef} className={shellClass} data-template={slug}>
       {isJewelryCardLayout ? (
         <div className="jewelry-card-wrap">
           <div className="jewelry-card-page">
             <div className="jewelry-card-grid">
-              <form className="public-card jewelry-card-form" onSubmit={onSubmit}>
+              <form className={cardClass} onSubmit={onSubmit}>
                 {formBody}
               </form>
               <aside className="jewelry-card-hero" aria-hidden>
@@ -94,10 +122,10 @@ export function FeedbackShell({
         </div>
       ) : (
         <>
-          <form className="public-card" onSubmit={onSubmit}>
+          <form className={isHeritageImmersive ? cardClass : "public-card"} onSubmit={onSubmit}>
             {formBody}
           </form>
-          <p className="public-powered">Powered by goliSoda</p>
+          <p className={`public-powered${isHeritageImmersive ? " heritage-immersive-powered" : ""}`}>Powered by goliSoda</p>
         </>
       )}
     </div>

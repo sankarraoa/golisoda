@@ -4,6 +4,18 @@ export type Renderer5 = "numeric" | "stars" | "emoji_5" | "color_scale";
 export type Renderer4 = "numeric" | "stars" | "emoji_4" | "color_scale";
 export type Renderer2 = "numeric" | "thumbs" | "emoji_2" | "yes_no";
 
+/** Optional chrome for `heritage_immersive*` templates (hero column + pack image URLs). */
+export type ImmersiveChromePackage = {
+  hero_column: "start" | "end";
+  hero_asset_paths: string[];
+};
+
+/** Optional static assets from an imported template ZIP (`assets/`). */
+export type TemplatePackagePresentation = {
+  stylesheets?: string[];
+  immersive?: ImmersiveChromePackage;
+};
+
 export type SurveyPresentation = {
   layout: "stepper" | "single_page";
   nps: { presentation: "numeric" | "segmented" };
@@ -13,6 +25,7 @@ export type SurveyPresentation = {
   progress: { style: "bar" | "dots" | "none" };
   navigation: { auto_advance: boolean };
   touch: { large_targets: boolean };
+  package?: TemplatePackagePresentation;
 };
 
 export const DEFAULT_SURVEY_PRESENTATION: SurveyPresentation = {
@@ -68,7 +81,7 @@ export function normalizeSurveyPresentation(raw: SurveyPresentationInput): Surve
     }
   }
 
-  return {
+  const normalized: SurveyPresentation = {
     layout,
     nps,
     csat_5,
@@ -78,4 +91,32 @@ export function normalizeSurveyPresentation(raw: SurveyPresentationInput): Surve
     navigation,
     touch,
   };
+
+  const pkg = raw.package;
+  if (pkg && typeof pkg === "object") {
+    const p = pkg as TemplatePackagePresentation & { stylesheets?: unknown; immersive?: unknown };
+    const sheets = Array.isArray(p.stylesheets)
+      ? p.stylesheets.filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+      : [];
+    let immersive: ImmersiveChromePackage | undefined;
+    if (p.immersive && typeof p.immersive === "object") {
+      const im = p.immersive as { hero_column?: string; hero_asset_paths?: unknown };
+      const hero_column = im.hero_column === "start" ? "start" : "end";
+      const hero_asset_paths = Array.isArray(im.hero_asset_paths)
+        ? im.hero_asset_paths.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+        : [];
+      immersive = { hero_column, hero_asset_paths };
+    }
+    if (sheets.length > 0 || immersive) {
+      normalized.package = {};
+      if (sheets.length > 0) {
+        normalized.package.stylesheets = sheets;
+      }
+      if (immersive) {
+        normalized.package.immersive = immersive;
+      }
+    }
+  }
+
+  return normalized;
 }

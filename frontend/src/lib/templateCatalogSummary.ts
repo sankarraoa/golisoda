@@ -8,6 +8,7 @@ const DISPLAY_NAME_BY_SLUG: Record<string, string> = {
   single_page: "Single page",
   kiosk_touch: "Kiosk / touch",
   heritage_immersive: "Heritage immersive",
+  heritage_immersive_hero_start: "Heritage immersive (hero leading)",
   heritage_luxury: "Heritage luxury (dual)",
   phone_portrait: "Phone (portrait)",
 };
@@ -29,6 +30,10 @@ const SUMMARY_BY_SLUG: Record<string, readonly [string, string]> = {
   heritage_immersive: [
     "Single-page layout with immersive brand framing.",
     "Best on tablet or phone (portrait); large touch targets.",
+  ],
+  heritage_immersive_hero_start: [
+    "Same heritage chrome as Heritage immersive; hero column is configured as the leading column.",
+    "Use package.immersive.hero_asset_paths for ZIP-served portraits; otherwise stock heroes apply.",
   ],
   heritage_luxury: [
     "Premium split layout with hero imagery and refined type.",

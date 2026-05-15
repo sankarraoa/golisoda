@@ -34,6 +34,10 @@ function adminApiBase(): string {
   );
 }
 
+export function getAdminApiBase(): string {
+  return adminApiBase();
+}
+
 /** Split deploy: base URL for Template Admin service (`/survey-templates`). Defaults to main API when monolithic.*/
 function templateApiBase(): string {
   return resolvePublicEnvUrl(

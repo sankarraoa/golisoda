@@ -6,8 +6,9 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import Response
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +21,7 @@ from app.api.platform_schemas import (
     SuperAdminUserPatchRequest,
     SuperAdminUserResponse,
 )
+from app.api.survey_template_schemas import SurveyTemplateResponse
 from app.api.tenant_schemas import TenantResponse
 from app.api.tenants import (
     ensure_permissions_and_default_roles,
@@ -29,8 +31,10 @@ from app.api.tenants import (
 from app.auth.dependencies import get_current_principal
 from app.auth.passwords import hash_password
 from app.auth.principal import Principal
+from app.core.config import get_settings
 from app.core.database import get_session
 from app.models.auth import Role, User, UserRoleBinding
+from app.models.channel import FeedbackChannel
 from app.models.enums import (
     AuditAction,
     AuditActorType,
@@ -40,8 +44,11 @@ from app.models.enums import (
     TenantStatus,
     UserStatus,
 )
+from app.models.survey_template import SurveyTemplate
 from app.models.tenant import Tenant
+from app.schemas.survey_presentation import parse_presentation
 from app.services.audit import write_audit_log
+from app.services.template_pack import build_export_zip, import_template_pack, remove_template_pack_dir
 
 router = APIRouter(prefix="/platform", tags=["platform"])
 
@@ -205,6 +212,143 @@ async def list_super_admin_users(
         )
         for u in users
     ]
+
+
+@router.get("/survey-templates", response_model=list[SurveyTemplateResponse])
+async def list_platform_survey_templates(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    principal: Annotated[Principal, Depends(get_current_principal)],
+) -> list[SurveyTemplateResponse]:
+    await ensure_permissions_and_default_roles(session)
+    _require_platform_operator(principal)
+
+    rows = (
+        await session.scalars(
+            select(SurveyTemplate).order_by(SurveyTemplate.sort_order.asc(), SurveyTemplate.slug.asc())
+        )
+    ).all()
+    return [
+        SurveyTemplateResponse(
+            id=row.id,
+            slug=row.slug,
+            name=row.name,
+            description=row.description,
+            deployment_notes=row.deployment_notes,
+            presentation=parse_presentation(row.presentation),
+            sort_order=row.sort_order,
+            is_active=row.is_active,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+        for row in rows
+    ]
+
+
+def _template_row_to_response(row: SurveyTemplate) -> SurveyTemplateResponse:
+    return SurveyTemplateResponse(
+        id=row.id,
+        slug=row.slug,
+        name=row.name,
+        description=row.description,
+        deployment_notes=row.deployment_notes,
+        presentation=parse_presentation(row.presentation),
+        sort_order=row.sort_order,
+        is_active=row.is_active,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+@router.get("/survey-templates/{template_id}/export")
+async def export_platform_survey_template_pack(
+    template_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    principal: Annotated[Principal, Depends(get_current_principal)],
+) -> Response:
+    await ensure_permissions_and_default_roles(session)
+    _require_platform_operator(principal)
+
+    row = await session.get(SurveyTemplate, template_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Survey template not found.")
+
+    settings = get_settings()
+    zip_bytes = build_export_zip(settings, row)
+    filename = f"template-{row.slug}.zip"
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post(
+    "/survey-templates/import",
+    response_model=SurveyTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def import_platform_survey_template_pack(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    file: Annotated[UploadFile, File(description="ZIP with template.json and optional assets/")],
+) -> SurveyTemplateResponse:
+    await ensure_permissions_and_default_roles(session)
+    _require_platform_operator(principal)
+
+    settings = get_settings()
+    try:
+        tpl = await import_template_pack(settings, session, file)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    await session.refresh(tpl)
+    return _template_row_to_response(tpl)
+
+
+@router.delete("/survey-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_platform_survey_template(
+    template_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    principal: Annotated[Principal, Depends(get_current_principal)],
+) -> None:
+    await ensure_permissions_and_default_roles(session)
+    _require_platform_operator(principal)
+
+    row = await session.get(SurveyTemplate, template_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Survey template not found.")
+
+    channel_n = await session.scalar(
+        select(func.count()).select_from(FeedbackChannel).where(FeedbackChannel.survey_template_id == template_id)
+    )
+    channel_n = int(channel_n or 0)
+    if channel_n > 0:
+        tenant_n = await session.scalar(
+            select(func.count(func.distinct(FeedbackChannel.tenant_id))).where(
+                FeedbackChannel.survey_template_id == template_id
+            )
+        )
+        tenant_n = int(tenant_n or 0)
+        c_word = "channel" if channel_n == 1 else "channels"
+        t_word = "tenant" if tenant_n == 1 else "tenants"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"This template cannot be deleted: {channel_n} {c_word} "
+                f"across {tenant_n} {t_word} still use it. "
+                "Reassign those channels to another template first."
+            ),
+        )
+
+    settings = get_settings()
+    try:
+        await session.delete(row)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    remove_template_pack_dir(settings, template_id)
 
 
 @router.post(

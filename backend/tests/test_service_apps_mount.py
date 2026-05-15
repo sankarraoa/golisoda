@@ -15,6 +15,7 @@ def test_public_feedback_has_f_and_health() -> None:
     assert client.get("/health").status_code == 200
     assert client.get("/f/nonexistent-channel").status_code in (403, 404)
     assert client.get("/survey-templates").status_code == 404
+    assert client.get("/public/template-assets/00000000-0000-0000-0000-000000000000/missing.css").status_code == 404
 
 
 def test_tenant_admin_registers_public_feedback_routes_without_db_touch() -> None:
@@ -41,4 +42,8 @@ def test_platform_admin_has_auth_health_and_guarded_platform_route() -> None:
     openapi = client.get("/openapi.json")
     assert openapi.status_code == 200
     assert "/auth/login" in openapi.json().get("paths", {})
-    assert client.get("/platform/tenants").status_code == 401
+    assert client.get("/platform/survey-templates").status_code == 401
+    assert client.post("/platform/survey-templates/import").status_code == 401
+    assert client.delete(
+        f"/platform/survey-templates/00000000-0000-0000-0000-000000000001",
+    ).status_code == 401

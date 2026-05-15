@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { FeedbackFlow } from "../../components/feedback/FeedbackFlow";
-import { applyTheme } from "../../feedback/theme/applyTheme";
-import { fetchPublicFeedbackContext, submitPublicFeedback } from "../../lib/publicFeedbackApi";
+import { applyBrandingCss, applyTheme } from "../../feedback/theme/applyTheme";
+import { useTemplatePackStylesheets } from "../../hooks/useTemplatePackStylesheets";
+import { fetchPublicFeedbackContext, getPublicFeedbackApiBase, submitPublicFeedback } from "../../lib/publicFeedbackApi";
 import type { PublicFeedbackContext, SubmitAnswer } from "../../types/publicFeedback";
 import { resolveSurveyPresentation } from "../../types/publicFeedback";
+import { DEFAULT_SURVEY_PRESENTATION } from "../../types/surveyPresentation";
 import { canonicalTemplateSlug } from "../../lib/templateSlug";
 
 type ViewState = "loading" | "ready" | "submitted" | "error";
@@ -35,6 +37,15 @@ export function PublicFeedbackPage() {
     () => new URLSearchParams(window.location.search).get("kiosk") === "1",
     [],
   );
+
+  const surveyPresentation = useMemo(() => {
+    if (!context) {
+      return DEFAULT_SURVEY_PRESENTATION;
+    }
+    return resolveSurveyPresentation(context);
+  }, [context]);
+
+  useTemplatePackStylesheets(context?.template?.id, surveyPresentation, getPublicFeedbackApiBase());
 
   const isKioskLoop =
     context !== null && (context.channel_type === "kiosk" || kioskUrlOverride);
@@ -98,35 +109,6 @@ export function PublicFeedbackPage() {
   }, [channelCode]);
 
   useEffect(() => {
-    if (!context) {
-      return;
-    }
-
-    applyTheme(context.effective_theme ?? {});
-  }, [context]);
-
-  useEffect(() => {
-    if (!context) {
-      return;
-    }
-
-    if (context.branding.primary_color) {
-      document.documentElement.style.setProperty("--color-tenant-primary", context.branding.primary_color);
-    } else {
-      document.documentElement.style.removeProperty("--color-tenant-primary");
-    }
-
-    if (context.branding.secondary_color) {
-      document.documentElement.style.setProperty(
-        "--color-tenant-secondary",
-        context.branding.secondary_color,
-      );
-    } else {
-      document.documentElement.style.removeProperty("--color-tenant-secondary");
-    }
-  }, [context]);
-
-  useEffect(() => {
     if (viewState !== "submitted" || !isKioskLoop) {
       return;
     }
@@ -179,11 +161,16 @@ export function PublicFeedbackPage() {
     );
   }
 
-  const presentation = resolveSurveyPresentation(context);
+  const presentation = surveyPresentation;
   const templateSlug = context.template?.slug ?? "default_stepper";
   const shellProps = {
     templateSlug,
     largeTargets: presentation.touch.large_targets,
+    theme: context.effective_theme ?? {},
+    branding: {
+      primary_color: context.branding.primary_color,
+      secondary_color: context.branding.secondary_color,
+    },
   };
 
   if (viewState === "error") {
@@ -257,6 +244,7 @@ export function PublicFeedbackPage() {
       surveyDescription={context.survey.description}
       surveyTitle={context.survey.title}
       templateSlug={templateSlug}
+      templateId={context.template?.id}
       theme={context.effective_theme ?? {}}
       organization={context.organization}
       disableStepBack={!isKioskLoop}
@@ -268,14 +256,36 @@ function PublicShell({
   children,
   templateSlug,
   largeTargets,
+  theme,
+  branding,
 }: {
   children: ReactNode;
   templateSlug?: string;
   largeTargets?: boolean;
+  theme?: Record<string, string>;
+  branding?: { primary_color?: string | null; secondary_color?: string | null };
 }) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const className = ["public-shell", largeTargets ? "public-shell--large-targets" : ""].filter(Boolean).join(" ");
+
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el || (theme === undefined && branding === undefined)) {
+      return;
+    }
+    applyTheme(theme ?? {}, el);
+    applyBrandingCss(
+      branding ?? { primary_color: null, secondary_color: null },
+      el,
+    );
+    return () => {
+      el.style.cssText = "";
+    };
+  }, [branding, theme]);
+
   return (
     <div
+      ref={rootRef}
       className={className}
       {...(templateSlug ? { "data-template": canonicalTemplateSlug(templateSlug) } : {})}
     >

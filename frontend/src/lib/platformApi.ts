@@ -1,4 +1,4 @@
-import type { MeResponse, TokenResponse } from "../types/admin";
+import type { MeResponse, SurveyTemplate, TokenResponse } from "../types/admin";
 
 import { resolvePublicEnvUrl } from "./runtimePublicEnv";
 
@@ -127,6 +127,49 @@ async function platformAuthFetch<T>(path: string, token: string, init: RequestIn
 
 export async function listPlatformSuperAdmins(token: string): Promise<SuperAdminUser[]> {
   return platformAuthFetch<SuperAdminUser[]>("/platform/super-admin-users", token);
+}
+
+export async function listPlatformSurveyTemplates(token: string): Promise<SurveyTemplate[]> {
+  return platformAuthFetch<SurveyTemplate[]>("/platform/survey-templates", token);
+}
+
+export function getPlatformApiBase(): string {
+  return platformApiBase();
+}
+
+export async function exportPlatformSurveyTemplatePack(token: string, templateId: string): Promise<Blob> {
+  const response = await fetch(
+    `${platformApiBase()}/platform/survey-templates/${encodeURIComponent(templateId)}/export`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok) {
+    throw new Error(await errorMessageFromResponse(response));
+  }
+  return response.blob();
+}
+
+export async function importPlatformSurveyTemplatePack(token: string, file: File): Promise<SurveyTemplate> {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch(`${platformApiBase()}/platform/survey-templates/import`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body,
+  });
+  if (!response.ok) {
+    throw new Error(await errorMessageFromResponse(response));
+  }
+  return response.json() as Promise<SurveyTemplate>;
+}
+
+export async function deletePlatformSurveyTemplate(token: string, templateId: string): Promise<void> {
+  const response = await fetch(
+    `${platformApiBase()}/platform/survey-templates/${encodeURIComponent(templateId)}`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok) {
+    throw new Error(await errorMessageFromResponse(response));
+  }
 }
 
 export async function createPlatformSuperAdmin(

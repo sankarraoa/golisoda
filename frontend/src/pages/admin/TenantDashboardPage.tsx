@@ -16,6 +16,7 @@ import {
   fetchTenantDashboard,
   fetchTenantList,
   getStoredAccessToken,
+  getAdminApiBase,
   importTenantBrandingLogoFromUrl,
   ACTIVE_TENANT_STORAGE_KEY,
   recordOrganizationVisit,
@@ -31,7 +32,7 @@ import {
   updateSurveyQuestion,
   patchSurveyQuestion,
 } from "../../lib/adminApi";
-import { getTemplateCatalogDisplayName, getTemplateCatalogSummaryLines } from "../../lib/templateCatalogSummary";
+import { getTemplateCatalogDisplayName } from "../../lib/templateCatalogSummary";
 import type {
   Channel,
   DashboardData,
@@ -49,14 +50,15 @@ import type {
   TenantBranding,
   TenantUser,
 } from "../../types/admin";
+import { TemplateLibrarySection } from "../../components/admin/TemplateLibrarySection";
 import { FeedbackFlow } from "../../components/feedback/FeedbackFlow";
 import { mapSurveyQuestionToPublic } from "../../components/feedback/mapSurveyQuestionToPublic";
-import { ChannelQrPosterModal } from "../../components/ChannelQrPosterModal";
-import { PortalOverflowMenu } from "../../components/PortalOverflowMenu";
 import {
   TEMPLATE_GALLERY_FIXTURE_QUESTIONS,
   buildPreviewContextStub,
 } from "../../components/feedback/templateGalleryFixtures";
+import { ChannelQrPosterModal } from "../../components/ChannelQrPosterModal";
+import { PortalOverflowMenu } from "../../components/PortalOverflowMenu";
 import { DEFAULT_SURVEY_PRESENTATION, normalizeSurveyPresentation, type SurveyPresentation } from "../../types/surveyPresentation";
 import type { PublicBranding, PublicOrganization } from "../../types/publicFeedback";
 import { mapTenantProfileToPublicOrganization } from "../../types/publicFeedback";
@@ -4256,124 +4258,11 @@ function TemplatesView({ dashboardData }: { dashboardData: DashboardData }) {
 
   return (
     <div className="section-stack templates-view">
-      <TemplateLibrarySection brandingPreview={brandingPreview} templates={dashboardData.surveyTemplates} />
-    </div>
-  );
-}
-
-function TemplateLibrarySection({
-  brandingPreview,
-  templates,
-}: {
-  brandingPreview: PublicBranding;
-  templates: SurveyTemplate[];
-}) {
-  const [selectedId, setSelectedId] = useState(templates[0]?.id ?? "");
-
-  useEffect(() => {
-    setSelectedId((prev) =>
-      prev && templates.some((template) => template.id === prev) ? prev : templates[0]?.id ?? "",
-    );
-  }, [templates]);
-
-  const selected = templates.find((template) => template.id === selectedId) ?? templates[0];
-
-  if (!selected) {
-    return null;
-  }
-
-  const stub = buildPreviewContextStub(brandingPreview);
-  const templatePresentation = normalizeSurveyPresentation(selected.presentation ?? {});
-  const hostStyle = {
-    ...(brandingPreview.primary_color ? { "--color-tenant-primary": brandingPreview.primary_color } : {}),
-    ...(brandingPreview.secondary_color ? { "--color-tenant-secondary": brandingPreview.secondary_color } : {}),
-  } as CSSProperties;
-
-  const [previewSummary1, previewSummary2] = getTemplateCatalogSummaryLines(selected);
-  const selectedDescription = selected.description?.trim() ?? "";
-  const selectedDeployNotes = selected.deployment_notes?.trim() ?? "";
-
-  return (
-    <div className="templates-library">
-      <div className="templates-library-body">
-        <div className="templates-library-catalog">
-          <div className="template-gallery" role="list">
-            {templates.map((template) => {
-              const displayName = getTemplateCatalogDisplayName(template);
-              const [summaryLine1, summaryLine2] = getTemplateCatalogSummaryLines(template);
-              const cardDescription = template.description?.trim();
-              return (
-              <button
-                key={template.id}
-                type="button"
-                role="listitem"
-                className={`template-gallery-card ${
-                  template.id === selected.id ? "template-gallery-card--selected" : ""
-                }`}
-                onClick={() => setSelectedId(template.id)}
-              >
-                <div className="template-gallery-card-title">{displayName}</div>
-                {cardDescription ? (
-                  <p className="template-gallery-card-desc template-gallery-card-desc--from-db" title={cardDescription}>
-                    {cardDescription}
-                  </p>
-                ) : (
-                  <p className="template-gallery-card-desc template-gallery-card-desc--catalog">
-                    <span className="template-gallery-card-desc-line">{summaryLine1}</span>
-                    <span className="template-gallery-card-desc-line">{summaryLine2}</span>
-                  </p>
-                )}
-              </button>
-              );
-            })}
-          </div>
-        </div>
-        <div className="templates-library-preview">
-          <header className="template-preview-panel-header">
-            <span className="template-preview-badge">Preview</span>
-            <h3 className="template-preview-panel-title">{getTemplateCatalogDisplayName(selected)}</h3>
-            {selectedDescription ? (
-              <>
-                <p className="template-preview-panel-official-desc">{selectedDescription}</p>
-                {selectedDeployNotes ? (
-                  <p className="template-preview-panel-deploy-notes">
-                    <span className="template-preview-panel-notes-label">Deployment</span>
-                    {selectedDeployNotes}
-                  </p>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <p className="template-preview-panel-desc template-preview-panel-desc--compact">
-                  <span className="template-gallery-card-desc-line">{previewSummary1}</span>
-                  <span className="template-gallery-card-desc-line">{previewSummary2}</span>
-                </p>
-                {selectedDeployNotes ? (
-                  <p className="template-preview-panel-deploy-notes">
-                    <span className="template-preview-panel-notes-label">Deployment</span>
-                    {selectedDeployNotes}
-                  </p>
-                ) : null}
-              </>
-            )}
-          </header>
-          <div className="template-gallery-preview-wrap template-gallery-preview-host" style={hostStyle}>
-            <FeedbackFlow
-              key={selected.id}
-              branding={stub.branding}
-              channelCode={null}
-              locationName={stub.location.name}
-              organization={stub.organization}
-              onSubmitAnswers={null}
-              presentation={templatePresentation}
-              questions={TEMPLATE_GALLERY_FIXTURE_QUESTIONS}
-              surveyDescription={selected.description ?? null}
-              surveyTitle={stub.survey.title}
-              templateSlug={selected.slug}
-            />
-          </div>
-        </div>
-      </div>
+      <TemplateLibrarySection
+        brandingPreview={brandingPreview}
+        templateAssetsApiOrigin={getAdminApiBase()}
+        templates={dashboardData.surveyTemplates}
+      />
     </div>
   );
 }

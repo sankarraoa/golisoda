@@ -19,5 +19,12 @@ describe("applyTheme", () => {
     applyTheme({});
     expect(document.documentElement.style.getPropertyValue("--color-brand-primary")).toBe("#00ff00");
   });
+
+  it("sets variables on a provided element instead of documentElement", () => {
+    const el = document.createElement("div");
+    applyTheme({ "color.brand.primary": "#abc" }, el);
+    expect(el.style.getPropertyValue("--color-brand-primary")).toBe("#abc");
+    expect(el.style.getPropertyValue("--color-tenant-primary")).toBe("#abc");
+  });
 });
 
