@@ -127,7 +127,11 @@ to the bundled **localhost** dev URL and pre-deploy Alembic cannot reach Railway
 Do not wrap the reference in extra quotes. **`Could not parse SQLAlchemy URL`** often meant an
 empty `DATABASE_URL`; the normalizer validates the URL and fails with a clearer message.
 
-**Frontend deploy: healthcheck fails or browser shows “Application failed to respond”**
+**Frontend `npm run build` fails in Railpack / Lightning CSS**
+
+Vite 8 may minify CSS with Lightning CSS, which can error on valid `@keyframes` (e.g. jewelry
+thank-you animations). This repo sets **`build.cssMinify: "esbuild"`** in **`frontend/vite.config.ts`**
+so production builds complete on Railway.
 
 - **Wrong target port:** In **Networking**, set **Target port** to the same port Vite prints at
   startup (usually **`$PORT`** from Railway — often **8080**, not **8000**).

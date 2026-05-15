@@ -59,6 +59,7 @@
 .public-shell[data-template="heritage_immersive"] .public-progress-dot--filled {
   background: var(--heritage-maroon);
   box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.35);
+}
 
 /* ── Hero crown (maroon dome + motif) ─────────────────────────────────── */
 .public-shell[data-template="heritage_immersive"] .heritage-hero {

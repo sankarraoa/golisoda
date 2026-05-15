@@ -30,6 +30,13 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       allowedHosts: true,
     },
+    /**
+     * Vite 8 defaults to Lightning CSS minify; it currently rejects some valid `@keyframes`
+     * blocks (e.g. in public-feedback-jewelry-card.css), failing `npm run build` on Railway.
+     */
+    build: {
+      cssMinify: "esbuild",
+    },
     test: {
       environment: "jsdom",
     },
