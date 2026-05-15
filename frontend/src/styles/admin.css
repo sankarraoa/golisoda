@@ -2939,9 +2939,10 @@ tbody tr:hover .row-actions {
 }
 
 .analytics-dash-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 16px 20px;
+  align-items: start;
   padding: 16px 18px;
   background: color-mix(in srgb, var(--color-bg-subtle) 70%, var(--color-bg-base));
   border: 1px solid var(--color-border-default);
@@ -2949,9 +2950,19 @@ tbody tr:hover .row-actions {
 }
 
 .analytics-filter-field {
-  flex: 1;
-  min-width: min(100%, 220px);
-  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.analytics-filter-field .field-label {
+  flex-shrink: 0;
+}
+
+.analytics-filter-field .field-input {
+  width: 100%;
+  min-width: 0;
 }
 
 .analytics-cohort-intro {

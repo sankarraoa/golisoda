@@ -241,7 +241,6 @@ export function AnalyticsDashboard({ dashboardData, me }: Props) {
     };
   }, [canLoadCohort, channelId, tenant.id, versionId]);
 
-  const cohortTitle = aggregate?.cohorts[0]?.survey_title;
   const cohortResponses = aggregate?.cohorts[0]?.response_count ?? 0;
 
   useEffect(() => {
@@ -370,7 +369,7 @@ export function AnalyticsDashboard({ dashboardData, me }: Props) {
             ) : (
               versionOptions.map((v) => (
                 <option key={v.id} value={v.id}>
-                  v{v.version_number} · {cohortTitle ?? surveyTitleGuess}
+                  v{v.version_number} · {v.schema_snapshot?.survey?.title?.trim() || surveyTitleGuess}
                 </option>
               ))
             )}
