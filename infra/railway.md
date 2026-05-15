@@ -71,28 +71,49 @@ Set these on the frontend service before building:
 
 After Railway creates public domains, update the API service:
 
-- `ADMIN_CORS_ORIGINS=https://<frontend-domain>` (comma-separated if the SPA is reachable on more than one origin, e.g. tenant UI + platform custom domain)
-- `PUBLIC_FEEDBACK_BASE_URL=https://<frontend-domain>`
+- `ADMIN_CORS_ORIGINS=…` — see **Public URLs (Railway now → golisoda.app)** below
+- `PUBLIC_FEEDBACK_BASE_URL=https://<frontend-domain>` — canonical origin for guest links/QRs (often your main site host)
 - `API_PUBLIC_ORIGIN=https://<api-domain>`
 
-## Platform admin URL (`/platform`)
+## Public URLs (Railway now → `www.golisoda.app` / `admin.golisoda.app`)
 
-The tenant and platform UIs ship in the **same** frontend build (`/` vs `/platform`). The path
-`/platform` does not create a separate hostname by itself.
+The SPA serves **tenant admin** (`/`), **platform** (`/platform`), and **public feedback** (`/f/…`) from the **same**
+frontend deployment. You do not need different code paths for “Railway era” vs “custom domain” era—only env vars and DNS.
 
-To use a **different hostname** (e.g. `platform-frontend-production-…up.railway.app` or
-`platform.yourdomain.com`) while still serving this app:
+### Phase 1 — Only Railway-generated hostnames (no domain purchase yet)
 
-1. Railway → **frontend** service → **Networking** → **Custom domains** → add your domain
-   and complete DNS (CNAME / target Railway shows). Railway’s [custom domain docs](https://docs.railway.com/deploy/exposing-your-app#custom-domains)
-   apply; the app continues to resolve `/platform` on that host.
-2. Update the **API** `ADMIN_CORS_ORIGINS` to include **every** browser origin that loads the admin SPA
-   (comma-separated), including the new platform URL origin if it differs from the main frontend URL.
-3. Optional: rename the service in Railway; some setups regenerate a friendlier default
-   `*.up.railway.app` label—**custom domains** are the reliable way to get a stable `platform-…` name.
+Use whatever **public URL** Railway shows for each service (e.g. `https://frontend-production-xxxx.up.railway.app` and `https://api-production-xxxx.up.railway.app`).
 
-A **second** frontend service (duplicate deploy) is only needed if you want a physically separate
-deployment; it is not required for a separate *URL* when one service can expose multiple domains.
+| Area | URL pattern |
+| --- | --- |
+| Tenant admin | `https://<railway-frontend>/` |
+| Platform | `https://<railway-frontend>/platform` |
+| Public feedback | `https://<railway-frontend>/f/<channel-code>` |
+| API | `https://<railway-api>/…` |
+
+- Frontend **Variables**: set every `VITE_*` API base to `https://<railway-api>` (no trailing slash unless your app expects it).
+- API **Variables**: `ADMIN_CORS_ORIGINS=https://<railway-frontend>` (single origin).  
+  `PUBLIC_FEEDBACK_BASE_URL=https://<railway-frontend>` so generated links match where guests are actually hosted.
+
+**One Railway URL for everything is normal** until you attach custom domains. Getting a *second* `*.up.railway.app` hostname for “admin” only usually means a **duplicate frontend service** (same repo/root) or waiting until you can add `admin.golisoda.app`.
+
+### Phase 2 — `www.golisoda.app` and `admin.golisoda.app`
+
+When DNS is ready, add **custom domains** on the **same** frontend service (Networking in Railway). Typical mapping:
+
+- `www.golisoda.app` — primary site: tenant admin, public `/f/…` links, marketing if you add it.
+- `admin.golisoda.app` — also points at the **same** deployment; use `https://admin.golisoda.app/platform` for platform staff (bookmark or redirect).
+
+Then:
+
+1. **API** `ADMIN_CORS_ORIGINS`: comma-separated list of every **browser origin** that loads the SPA, e.g.  
+   `https://www.golisoda.app,https://admin.golisoda.app`  
+   (include old Railway hosts temporarily if you still use them during cutover.)
+2. **`PUBLIC_FEEDBACK_BASE_URL`**: set to `https://www.golisoda.app` (canonical guest-facing origin).
+3. Update **`VITE_*`** on the frontend if the API moves to e.g. `https://api.golisoda.app`.
+4. Redeploy or restart so `write-runtime-env.mjs` / build picks up new values.
+
+Railway: [custom domains](https://docs.railway.com/deploy/exposing-your-app#custom-domains).
 
 ## Worker Variables
 
