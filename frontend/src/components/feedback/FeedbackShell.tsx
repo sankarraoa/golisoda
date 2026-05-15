@@ -1,5 +1,6 @@
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 
+import { canonicalTemplateSlug } from "../../lib/templateSlug";
 import type { SurveyPresentation } from "../../types/surveyPresentation";
 
 export function FeedbackProgress({
@@ -73,10 +74,10 @@ export function FeedbackShell({
     </>
   );
 
-  const isJewelryCardLayout = templateSlug === "heritage_luxury";
+  const isJewelryCardLayout = canonicalTemplateSlug(templateSlug) === "heritage_luxury";
 
   return (
-    <div className={shellClass} data-template={templateSlug}>
+    <div className={shellClass} data-template={canonicalTemplateSlug(templateSlug)}>
       {isJewelryCardLayout ? (
         <div className="jewelry-card-wrap">
           <div className="jewelry-card-page">

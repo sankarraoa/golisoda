@@ -1,4 +1,5 @@
 import type { SurveyTemplate } from "../types/admin";
+import { canonicalTemplateSlug } from "./templateSlug";
 import { normalizeSurveyPresentation, type SurveyPresentationInput } from "../types/surveyPresentation";
 
 /** Fixed catalog copy so list rows stay short even when DB descriptions are long. */
@@ -44,7 +45,7 @@ function fallbackSummary(presentation: SurveyPresentationInput): readonly [strin
 
 /** Two short lines: what the template is, then primary device context (for dense catalog lists). */
 export function getTemplateCatalogSummaryLines(template: SurveyTemplate): readonly [string, string] {
-  const fromSlug = SUMMARY_BY_SLUG[template.slug];
+  const fromSlug = SUMMARY_BY_SLUG[canonicalTemplateSlug(template.slug)];
   if (fromSlug) {
     return fromSlug;
   }

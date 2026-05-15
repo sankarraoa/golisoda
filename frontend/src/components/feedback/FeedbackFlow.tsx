@@ -9,6 +9,7 @@ import type {
 } from "../../types/publicFeedback";
 import { formatPublicOrganizationAddressLines } from "../../types/publicFeedback";
 import type { SurveyPresentation } from "../../types/surveyPresentation";
+import { canonicalTemplateSlug } from "../../lib/templateSlug";
 import { FeedbackHeader, FeedbackProgress, FeedbackShell } from "./FeedbackShell";
 import { QuestionRenderer, validateQuestionAnswer } from "./QuestionRenderer";
 
@@ -79,6 +80,7 @@ export function FeedbackFlow({
   const layout = presentation.layout;
   const sortedQuestions = [...questions].sort((a, b) => a.sort_order - b.sort_order);
   const currentQuestion = sortedQuestions[questionIndex];
+  const templateKey = canonicalTemplateSlug(templateSlug);
   const isPreview = onSubmitAnswers === null || channelCode === null;
   const isLastQuestion = layout === "stepper" && questionIndex === sortedQuestions.length - 1;
 
@@ -195,7 +197,7 @@ export function FeedbackFlow({
       </div>
     ) : null;
 
-  const kioskSubmitPhrase = templateSlug === "kiosk_touch" ? "Submit Feedback" : "Submit";
+  const kioskSubmitPhrase = templateKey === "kiosk_touch" ? "Submit Feedback" : "Submit";
 
   const heritageFooterTagline =
     surveyDescription?.trim() || "Your feedback helps us serve you better.";
@@ -229,7 +231,7 @@ export function FeedbackFlow({
     ) : null;
 
   const footer =
-    templateSlug === "heritage_immersive" ? (
+    templateKey === "heritage_immersive" ? (
       <>
         <footer className="public-footer public-footer--heritage">
           <div className="heritage-footer-inner">
@@ -255,7 +257,7 @@ export function FeedbackFlow({
         </footer>
         <div className="heritage-floor" aria-hidden />
       </>
-    ) : templateSlug === "heritage_luxury" ? (
+    ) : templateKey === "heritage_luxury" ? (
       <footer className="public-footer public-footer--jewelry-card">
         {previewBadge ? (
           <div className="jewelry-card-preview-note">
@@ -270,7 +272,7 @@ export function FeedbackFlow({
             type="submit"
           >
             {footerSubmitLabel}
-            {templateSlug === "heritage_luxury" || footerSubmitLabel === "Submitting" ? null : (
+            {templateKey === "heritage_luxury" || footerSubmitLabel === "Submitting" ? null : (
               <>
                 {" "}
                 »
@@ -348,7 +350,7 @@ export function FeedbackFlow({
   }
 
   const headerNode =
-    templateSlug === "heritage_immersive" ? (
+    templateKey === "heritage_immersive" ? (
       <>
         <div className="heritage-hero">
           <div className="heritage-maroon-crown">
@@ -371,7 +373,7 @@ export function FeedbackFlow({
           title={surveyTitle}
         />
       </>
-    ) : templateSlug === "heritage_luxury" ? (
+    ) : templateKey === "heritage_luxury" ? (
       (() => {
         const orgLines = formatPublicOrganizationAddressLines(organization);
         const displayName = organization.name?.trim() || surveyTitle;
@@ -400,7 +402,7 @@ export function FeedbackFlow({
         logo={
           <TenantLogoFeedback
             branding={branding}
-            logoFallback={templateSlug === "kiosk_touch" ? "org-symbol" : "initial"}
+            logoFallback={templateKey === "kiosk_touch" ? "org-symbol" : "initial"}
             surveyTitle={surveyTitle}
           />
         }

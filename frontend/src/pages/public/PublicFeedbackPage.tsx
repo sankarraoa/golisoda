@@ -5,6 +5,7 @@ import { applyTheme } from "../../feedback/theme/applyTheme";
 import { fetchPublicFeedbackContext, submitPublicFeedback } from "../../lib/publicFeedbackApi";
 import type { PublicFeedbackContext, SubmitAnswer } from "../../types/publicFeedback";
 import { resolveSurveyPresentation } from "../../types/publicFeedback";
+import { canonicalTemplateSlug } from "../../lib/templateSlug";
 
 type ViewState = "loading" | "ready" | "submitted" | "error";
 
@@ -203,7 +204,7 @@ export function PublicFeedbackPage() {
     const thankBody = thankYouText || context.branding.thank_you_text;
     const kioskHelper = isKioskLoop ? `Next person in ${resetSeconds}s.` : undefined;
 
-    if (templateSlug === "heritage_luxury") {
+    if (canonicalTemplateSlug(templateSlug) === "heritage_luxury") {
       return (
         <PublicShell {...shellProps}>
           <JewelryThankYouPanel body={thankBody} helperText={kioskHelper} />
@@ -274,7 +275,10 @@ function PublicShell({
 }) {
   const className = ["public-shell", largeTargets ? "public-shell--large-targets" : ""].filter(Boolean).join(" ");
   return (
-    <div className={className} {...(templateSlug ? { "data-template": templateSlug } : {})}>
+    <div
+      className={className}
+      {...(templateSlug ? { "data-template": canonicalTemplateSlug(templateSlug) } : {})}
+    >
       {children}
     </div>
   );
