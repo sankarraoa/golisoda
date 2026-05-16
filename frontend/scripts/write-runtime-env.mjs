@@ -154,6 +154,6 @@ if (!apiUrl) {
 
 if (process.env.RAILWAY_ENVIRONMENT && !env.VITE_PLATFORM_ADMIN_HOSTNAME) {
   console.warn(
-    "[write-runtime-env] PLATFORM_ADMIN_HOSTNAME (or VITE_* / GOLI_* alias) not visible in process.env at preview start — admin hostname → /platform redirect will not work. Confirm the variable is on this service and not build-only.",
+    "[write-runtime-env] PLATFORM_ADMIN_HOSTNAME (or VITE_* / GOLI_* alias) not visible in process.env at preview start — admin console must use hostname-based routing (set the hostname or use /platform on localhost).",
   );
 }

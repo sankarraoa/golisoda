@@ -8,7 +8,7 @@ export type GoliRuntimePublicEnv = {
   VITE_TEMPLATE_API_BASE_URL?: string;
   VITE_PUBLIC_FEEDBACK_API_URL?: string;
   VITE_PLATFORM_API_BASE_URL?: string;
-  /** Hostname only (e.g. admin.example.com). Root `/` redirects to `/platform`. */
+  /** Hostname only (e.g. admin.example.com). That host serves PlatformApp at `/`. */
   VITE_PLATFORM_ADMIN_HOSTNAME?: string;
 };
 
@@ -51,6 +51,30 @@ export function normalizePlatformAdminHostname(raw: string | undefined | null): 
     s = s.slice(0, slash).trim();
   }
   return s.toLowerCase();
+}
+
+/** Resolves configured platform-admin hostname (runtime-env, meta, build-time env). */
+export function readPlatformAdminHostnameConfigured(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  const fromMeta =
+    document.querySelector('meta[name="goli-platform-admin-hostname"]')?.getAttribute("content")?.trim() ?? "";
+  const raw =
+    readRuntimePublicEnv().VITE_PLATFORM_ADMIN_HOSTNAME ||
+    fromMeta ||
+    import.meta.env.VITE_PLATFORM_ADMIN_HOSTNAME ||
+    "";
+  return normalizePlatformAdminHostname(raw);
+}
+
+/** True when this browser tab is on the dedicated platform-admin host (e.g. admin.example.com). */
+export function isPlatformAdminSite(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const want = readPlatformAdminHostnameConfigured();
+  return Boolean(want && window.location.hostname.toLowerCase() === want);
 }
 
 function normalizeBase(url: string): string {

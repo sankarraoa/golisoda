@@ -68,7 +68,7 @@ Set these on the frontend service before building:
 - `VITE_PUBLIC_FEEDBACK_API_URL=https://<api-domain>`
 - `VITE_TEMPLATE_API_BASE_URL=https://<api-domain>`
 - `VITE_PLATFORM_API_BASE_URL=https://<api-domain>` if using platform admin routes
-- `VITE_PLATFORM_ADMIN_HOSTNAME=admin.golisoda.app` (hostname only; **`/` → `/platform`** for superadmin), or aliases **`PLATFORM_ADMIN_HOSTNAME`** / **`GOLI_PLATFORM_ADMIN_HOSTNAME`** — written into `runtime-env.js` and the **`goli-platform-admin-hostname`** meta tag at container start
+- `VITE_PLATFORM_ADMIN_HOSTNAME=admin.golisoda.app` (hostname only; **superadmin UI at `https://admin.* /`** with no path), or aliases **`PLATFORM_ADMIN_HOSTNAME`** / **`GOLI_PLATFORM_ADMIN_HOSTNAME`** — written into `runtime-env.js` and the **`goli-platform-admin-hostname`** meta tag at container start
 
 After Railway creates public domains, update the API service:
 
@@ -78,7 +78,7 @@ After Railway creates public domains, update the API service:
 
 ## Public URLs (Railway now → `app.golisoda.app` / `admin.golisoda.app`)
 
-The SPA serves **tenant admin** (`/`), **platform** (`/platform`), and **public feedback** (`/f/…`) from the **same**
+The SPA serves **tenant admin** (`/` on **`app.*`**), **platform superadmin** (`/` on **`admin.*`** when configured, or **`/platform`** on any host for local/dev), and **public feedback** (`/f/…`) from the **same**
 frontend deployment. You do not need different code paths for “Railway era” vs “custom domain” era—only env vars and DNS.
 
 ### Phase 1 — Only Railway-generated hostnames (no domain purchase yet)
@@ -88,7 +88,7 @@ Use whatever **public URL** Railway shows for each service (e.g. `https://fronte
 | Area | URL pattern |
 | --- | --- |
 | Tenant admin | `https://<railway-frontend>/` |
-| Platform | `https://<railway-frontend>/platform` |
+| Platform | `https://<railway-frontend>/platform` or dedicated `admin.*` host at `/` |
 | Public feedback | `https://<railway-frontend>/f/<channel-code>` |
 | API | `https://<railway-api>/…` |
 
@@ -103,7 +103,7 @@ Use whatever **public URL** Railway shows for each service (e.g. `https://fronte
 When DNS is ready, add **custom domains** on the **same** frontend service (Networking in Railway). Typical mapping:
 
 - `app.golisoda.app` — primary site: tenant admin, public `/f/…` links.
-- `admin.golisoda.app` — same deployment; **`/` → `/platform`** when **`VITE_PLATFORM_ADMIN_HOSTNAME`** or **`PLATFORM_ADMIN_HOSTNAME`** is set (otherwise open `/platform` manually).
+- `admin.golisoda.app` — same deployment; **superadmin at `/`** when **`VITE_PLATFORM_ADMIN_HOSTNAME`** or **`PLATFORM_ADMIN_HOSTNAME`** is set (otherwise use **`/platform`** on the default Railway URL or `app.*`).
 
 Then:
 
@@ -112,7 +112,7 @@ Then:
    (include old Railway hosts temporarily if you still use them during cutover.)
 2. **`PUBLIC_FEEDBACK_BASE_URL`**: set to `https://app.golisoda.app` (canonical guest-facing origin for channel links/QRs).
 3. Update **`VITE_*`** on the frontend if the API moves to e.g. `https://api.golisoda.app`.
-4. Frontend **Variables**: set **`VITE_PLATFORM_ADMIN_HOSTNAME=admin.golisoda.app`** or **`PLATFORM_ADMIN_HOSTNAME=admin.golisoda.app`** (hostname only, no `https://`). Visiting `https://admin.golisoda.app/` redirects once to **`/platform`** (platform login / dashboard). Omit entirely if you use only `app.*` and open `/platform` manually. Restart/redeploy picks up the var via `write-runtime-env.mjs`.
+4. Frontend **Variables**: set **`VITE_PLATFORM_ADMIN_HOSTNAME=admin.golisoda.app`** or **`PLATFORM_ADMIN_HOSTNAME=admin.golisoda.app`** (hostname only, no `https://`). **`https://admin.golisoda.app/`** then loads the platform console with **no `/platform` path**; legacy **`/platform`** on that host is normalized to **`/`**. Omit entirely if you use only `app.*` and open **`/platform`** for superadmin. Restart/redeploy picks up the var via `write-runtime-env.mjs`.
 5. Redeploy or restart so `write-runtime-env.mjs` / build picks up new values.
 
 Railway: [custom domains](https://docs.railway.com/deploy/exposing-your-app#custom-domains).
@@ -193,7 +193,7 @@ so production builds complete on Railway.
 - **`vite preview` + healthcheck host:** Without **`preview.allowedHosts`** in **`vite.config.ts`**,
   Vite can return **503** for **`Host: healthcheck.railway.app`**. This repo enables
   **`preview.allowedHosts: true`** and binds **`0.0.0.0`**.
-- **`admin.*` root not redirecting to `/platform`:** Set **`VITE_PLATFORM_ADMIN_HOSTNAME`** (or **`PLATFORM_ADMIN_HOSTNAME`**) to **`admin.golisoda.app`** only — no `https://`, and in Railway’s variable UI enter the value **without** wrapping it in quote characters. **Restart** the frontend so `npm run preview` re-runs **`scripts/write-runtime-env.mjs`**. Then open **`https://admin.golisoda.app/runtime-env.js`**: the response should include **`VITE_PLATFORM_ADMIN_HOSTNAME`**. If that key is absent, the redirect will not run (often means the service was not restarted, or env is on the wrong service).
+- **`admin.*` not loading superadmin at `/`:** Set **`VITE_PLATFORM_ADMIN_HOSTNAME`** (or **`PLATFORM_ADMIN_HOSTNAME`**) to **`admin.golisoda.app`** only — no `https://`, and in Railway’s variable UI enter the value **without** wrapping it in quote characters. **Restart** the frontend so `npm run preview` re-runs **`scripts/write-runtime-env.mjs`**. Then open **`https://admin.golisoda.app/runtime-env.js`**: the response should include **`VITE_PLATFORM_ADMIN_HOSTNAME`**. If that key is absent, hostname routing will not run (often means the service was not restarted, or env is on the wrong service).
 - **No start command:** If **`railpack.json` / `railway.toml`** omit **`npm run preview`**, Railpack
   may not serve the SPA on a port Railway routes to — restore the documented start command.
 
