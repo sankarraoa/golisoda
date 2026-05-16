@@ -8,6 +8,8 @@ export type GoliRuntimePublicEnv = {
   VITE_TEMPLATE_API_BASE_URL?: string;
   VITE_PUBLIC_FEEDBACK_API_URL?: string;
   VITE_PLATFORM_API_BASE_URL?: string;
+  /** Hostname only (e.g. admin.example.com). Root `/` redirects to `/platform`. */
+  VITE_PLATFORM_ADMIN_HOSTNAME?: string;
 };
 
 declare global {
@@ -21,6 +23,34 @@ export function readRuntimePublicEnv(): GoliRuntimePublicEnv {
     return {};
   }
   return window.__GOLI_RUNTIME_ENV__ ?? {};
+}
+
+/**
+ * Hostname only, lowercase. Strips accidental quotes (common in pasted env) and `https://host` forms.
+ */
+export function normalizePlatformAdminHostname(raw: string | undefined | null): string {
+  if (raw == null) {
+    return "";
+  }
+  let s = String(raw).trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.slice(1, -1).trim();
+  }
+  if (!s) {
+    return "";
+  }
+  if (s.includes("://")) {
+    try {
+      return new URL(s).hostname.toLowerCase();
+    } catch {
+      return "";
+    }
+  }
+  const slash = s.indexOf("/");
+  if (slash !== -1) {
+    s = s.slice(0, slash).trim();
+  }
+  return s.toLowerCase();
 }
 
 function normalizeBase(url: string): string {

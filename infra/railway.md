@@ -68,14 +68,15 @@ Set these on the frontend service before building:
 - `VITE_PUBLIC_FEEDBACK_API_URL=https://<api-domain>`
 - `VITE_TEMPLATE_API_BASE_URL=https://<api-domain>`
 - `VITE_PLATFORM_API_BASE_URL=https://<api-domain>` if using platform admin routes
+- `VITE_PLATFORM_ADMIN_HOSTNAME=admin.golisoda.app` (hostname only; **`/` → `/platform`** for superadmin), or aliases **`PLATFORM_ADMIN_HOSTNAME`** / **`GOLI_PLATFORM_ADMIN_HOSTNAME`** — written into `runtime-env.js` and the **`goli-platform-admin-hostname`** meta tag at container start
 
 After Railway creates public domains, update the API service:
 
-- `ADMIN_CORS_ORIGINS=…` — see **Public URLs (Railway now → golisoda.app)** below
+- `ADMIN_CORS_ORIGINS=…` — see **Public URLs (`app` + `admin` hostnames)** below
 - `PUBLIC_FEEDBACK_BASE_URL=https://<frontend-domain>` — canonical origin for guest links/QRs (often your main site host)
 - `API_PUBLIC_ORIGIN=https://<api-domain>`
 
-## Public URLs (Railway now → `www.golisoda.app` / `admin.golisoda.app`)
+## Public URLs (Railway now → `app.golisoda.app` / `admin.golisoda.app`)
 
 The SPA serves **tenant admin** (`/`), **platform** (`/platform`), and **public feedback** (`/f/…`) from the **same**
 frontend deployment. You do not need different code paths for “Railway era” vs “custom domain” era—only env vars and DNS.
@@ -97,23 +98,37 @@ Use whatever **public URL** Railway shows for each service (e.g. `https://fronte
 
 **One Railway URL for everything is normal** until you attach custom domains. Getting a *second* `*.up.railway.app` hostname for “admin” only usually means a **duplicate frontend service** (same repo/root) or waiting until you can add `admin.golisoda.app`.
 
-### Phase 2 — `www.golisoda.app` and `admin.golisoda.app`
+### Phase 2 — `app.golisoda.app` and `admin.golisoda.app`
 
 When DNS is ready, add **custom domains** on the **same** frontend service (Networking in Railway). Typical mapping:
 
-- `www.golisoda.app` — primary site: tenant admin, public `/f/…` links, marketing if you add it.
-- `admin.golisoda.app` — also points at the **same** deployment; use `https://admin.golisoda.app/platform` for platform staff (bookmark or redirect).
+- `app.golisoda.app` — primary site: tenant admin, public `/f/…` links.
+- `admin.golisoda.app` — same deployment; **`/` → `/platform`** when **`VITE_PLATFORM_ADMIN_HOSTNAME`** or **`PLATFORM_ADMIN_HOSTNAME`** is set (otherwise open `/platform` manually).
 
 Then:
 
 1. **API** `ADMIN_CORS_ORIGINS`: comma-separated list of every **browser origin** that loads the SPA, e.g.  
-   `https://www.golisoda.app,https://admin.golisoda.app`  
+   `https://app.golisoda.app,https://admin.golisoda.app`  
    (include old Railway hosts temporarily if you still use them during cutover.)
-2. **`PUBLIC_FEEDBACK_BASE_URL`**: set to `https://www.golisoda.app` (canonical guest-facing origin).
+2. **`PUBLIC_FEEDBACK_BASE_URL`**: set to `https://app.golisoda.app` (canonical guest-facing origin for channel links/QRs).
 3. Update **`VITE_*`** on the frontend if the API moves to e.g. `https://api.golisoda.app`.
-4. Redeploy or restart so `write-runtime-env.mjs` / build picks up new values.
+4. Frontend **Variables**: set **`VITE_PLATFORM_ADMIN_HOSTNAME=admin.golisoda.app`** or **`PLATFORM_ADMIN_HOSTNAME=admin.golisoda.app`** (hostname only, no `https://`). Visiting `https://admin.golisoda.app/` redirects once to **`/platform`** (platform login / dashboard). Omit entirely if you use only `app.*` and open `/platform` manually. Restart/redeploy picks up the var via `write-runtime-env.mjs`.
+5. Redeploy or restart so `write-runtime-env.mjs` / build picks up new values.
 
 Railway: [custom domains](https://docs.railway.com/deploy/exposing-your-app#custom-domains).
+
+### GoDaddy DNS (point `app` and `admin` at Railway)
+
+In GoDaddy → **My Products** → your domain → **DNS** / **Manage DNS**:
+
+1. **Remove or adjust conflicting records** for `@`, `app`, and `admin` (only one row per name/type you need). **`www`** is optional—leave it unchanged or add it later; it is **not** required for `app.golisoda.app` or `admin.golisoda.app`.
+2. Railway’s custom-domain flow usually asks for a **CNAME** target such as `<something>.up.railway.app` (copy it from **Railway → your frontend service → Networking → Custom domain** after you add each hostname).
+3. Add:
+   - **Type** `CNAME`, **Host** `app`, **Value** the Railway hostname Railway shows for `app.golisoda.app`.
+   - **Type** `CNAME`, **Host** `admin`, **Value** the same (or the second domain’s Railway target if they differ—the UI will tell you).
+4. For the **apex** `golisoda.app`: either GoDaddy **forwarding** to `https://app.golisoda.app`, or an **ALIAS/ANAME** at DNS toward Railway if available; Railway’s docs list what record types they accept per domain.
+
+SSL certificates for both hostnames are issued after DNS propagates and you complete verification in Railway. Propagation can take up to an hour or more.
 
 ## Worker Variables
 
@@ -178,6 +193,7 @@ so production builds complete on Railway.
 - **`vite preview` + healthcheck host:** Without **`preview.allowedHosts`** in **`vite.config.ts`**,
   Vite can return **503** for **`Host: healthcheck.railway.app`**. This repo enables
   **`preview.allowedHosts: true`** and binds **`0.0.0.0`**.
+- **`admin.*` root not redirecting to `/platform`:** Set **`VITE_PLATFORM_ADMIN_HOSTNAME`** (or **`PLATFORM_ADMIN_HOSTNAME`**) to **`admin.golisoda.app`** only — no `https://`, and in Railway’s variable UI enter the value **without** wrapping it in quote characters. **Restart** the frontend so `npm run preview` re-runs **`scripts/write-runtime-env.mjs`**. Then open **`https://admin.golisoda.app/runtime-env.js`**: the response should include **`VITE_PLATFORM_ADMIN_HOSTNAME`**. If that key is absent, the redirect will not run (often means the service was not restarted, or env is on the wrong service).
 - **No start command:** If **`railpack.json` / `railway.toml`** omit **`npm run preview`**, Railpack
   may not serve the SPA on a port Railway routes to — restore the documented start command.
 
