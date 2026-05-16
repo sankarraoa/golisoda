@@ -24,6 +24,7 @@ from app.models.enums import (
 )
 from app.models.tenant import Tenant
 from app.services.audit import write_audit_log
+from app.services.audit_context import anonymous_actor, audit_actor_from_user, audit_metadata, system_actor
 
 
 class AuthError(Exception):
@@ -40,12 +41,13 @@ async def _reject_login_unknown(
         action=AuditAction.LOGIN_FAILED,
         outcome=AuditOutcome.DENIED,
         request_id=request_id,
-        metadata={"email": normalized_email},
+        metadata=audit_metadata(actor=anonymous_actor(email=normalized_email)),
     )
     raise AuthError("Invalid email or password.")
 
 
 async def _reject_inactive(session: AsyncSession, user: User, request_id: str | None) -> None:
+    actor = await audit_actor_from_user(session, user)
     await write_audit_log(
         session,
         actor_type=AuditActorType.USER,
@@ -54,7 +56,7 @@ async def _reject_inactive(session: AsyncSession, user: User, request_id: str | 
         action=AuditAction.LOGIN_FAILED,
         outcome=AuditOutcome.DENIED,
         request_id=request_id,
-        metadata={"reason": "inactive_user"},
+        metadata=audit_metadata(actor=actor, reason="inactive_user"),
     )
     raise AuthError("User is not active.")
 
@@ -63,6 +65,7 @@ async def _complete_login(
     session: AsyncSession, user: User, *, request_id: str | None
 ) -> User:
     user.last_login_at = datetime.now(UTC)
+    actor = await audit_actor_from_user(session, user)
     await write_audit_log(
         session,
         actor_type=AuditActorType.USER,
@@ -71,6 +74,7 @@ async def _complete_login(
         action=AuditAction.LOGIN,
         outcome=AuditOutcome.SUCCESS,
         request_id=request_id,
+        metadata=audit_metadata(actor=actor, payload_level="action_only"),
     )
     return user
 
@@ -116,6 +120,7 @@ async def authenticate_tenant_admin_user(
 
     tenant = await session.get(Tenant, user.tenant_id)
     if tenant is None or tenant.status != TenantStatus.ACTIVE:
+        actor = await audit_actor_from_user(session, user)
         await write_audit_log(
             session,
             actor_type=AuditActorType.USER,
@@ -124,7 +129,7 @@ async def authenticate_tenant_admin_user(
             action=AuditAction.LOGIN_FAILED,
             outcome=AuditOutcome.DENIED,
             request_id=request_id,
-            metadata={"reason": "tenant_inactive"},
+            metadata=audit_metadata(actor=actor, reason="tenant_inactive"),
         )
         raise AuthError("Organization access is disabled.")
 
@@ -156,6 +161,7 @@ async def authenticate_platform_super_admin_user(
 
     principal = await load_principal(session, user)
     if PermissionCode.PLATFORM_MANAGE.value not in principal.permission_codes:
+        actor = await audit_actor_from_user(session, user)
         await write_audit_log(
             session,
             actor_type=AuditActorType.USER,
@@ -164,7 +170,7 @@ async def authenticate_platform_super_admin_user(
             action=AuditAction.LOGIN_FAILED,
             outcome=AuditOutcome.DENIED,
             request_id=request_id,
-            metadata={"reason": "not_platform_super_admin"},
+            metadata=audit_metadata(actor=actor, reason="not_platform_super_admin"),
         )
         raise AuthError("Invalid email or password.")
 
@@ -200,6 +206,7 @@ async def authenticate_monolith_user(
     if user.tenant_id is not None:
         tenant = await session.get(Tenant, user.tenant_id)
         if tenant is None or tenant.status != TenantStatus.ACTIVE:
+            actor = await audit_actor_from_user(session, user)
             await write_audit_log(
                 session,
                 actor_type=AuditActorType.USER,
@@ -208,13 +215,14 @@ async def authenticate_monolith_user(
                 action=AuditAction.LOGIN_FAILED,
                 outcome=AuditOutcome.DENIED,
                 request_id=request_id,
-                metadata={"reason": "tenant_inactive"},
+                metadata=audit_metadata(actor=actor, reason="tenant_inactive"),
             )
             raise AuthError("Organization access is disabled.")
 
     if user.tenant_id is None:
         principal = await load_principal(session, user)
         if PermissionCode.PLATFORM_MANAGE.value not in principal.permission_codes:
+            actor = await audit_actor_from_user(session, user)
             await write_audit_log(
                 session,
                 actor_type=AuditActorType.USER,
@@ -223,7 +231,7 @@ async def authenticate_monolith_user(
                 action=AuditAction.LOGIN_FAILED,
                 outcome=AuditOutcome.DENIED,
                 request_id=request_id,
-                metadata={"reason": "not_platform_super_admin"},
+                metadata=audit_metadata(actor=actor, reason="not_platform_super_admin"),
             )
             raise AuthError("Invalid email or password.")
 
@@ -273,7 +281,7 @@ async def refresh_token_pair(
             action=AuditAction.TOKEN_REVOKED,
             outcome=AuditOutcome.DENIED,
             request_id=request_id,
-            metadata={"reason": str(exc)},
+            metadata=audit_metadata(actor=system_actor("auth"), reason=str(exc)),
         )
         raise AuthError("Invalid refresh token.") from exc
 

@@ -1,5 +1,6 @@
 import type {
   AnalyticsSummary,
+  AuditLogEntry,
   Channel,
   Csat2DashboardPayload,
   DashboardData,
@@ -761,4 +762,46 @@ export async function publishSurvey(
   return authenticatedFetch<SurveyVersion>(`/tenants/${tenantId}/surveys/${surveyId}/publish`, token, {
     method: "POST",
   });
+}
+
+export type FetchTenantAuditLogsParams = {
+  relatedSurveyId?: string;
+  resourceId?: string;
+  resourceTypes?: string[];
+  action?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export async function fetchTenantAuditLogs(
+  token: string,
+  tenantId: string,
+  params: FetchTenantAuditLogsParams = {},
+): Promise<AuditLogEntry[]> {
+  const sp = new URLSearchParams();
+  if (params.relatedSurveyId) {
+    sp.set("related_survey_id", params.relatedSurveyId);
+  }
+  if (params.resourceId) {
+    sp.set("resource_id", params.resourceId);
+  }
+  if (params.resourceTypes?.length) {
+    sp.set("resource_types", params.resourceTypes.join(","));
+  }
+  if (params.action?.trim()) {
+    sp.set("action", params.action.trim());
+  }
+  if (params.q?.trim()) {
+    sp.set("q", params.q.trim());
+  }
+  if (params.limit != null) {
+    sp.set("limit", String(params.limit));
+  }
+  if (params.offset != null) {
+    sp.set("offset", String(params.offset));
+  }
+  const qs = sp.toString();
+  const path = qs ? `/tenants/${tenantId}/audit-logs?${qs}` : `/tenants/${tenantId}/audit-logs`;
+  return authenticatedFetch<AuditLogEntry[]>(path, token);
 }

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { ReactNode } from "react";
 
+import { AuditTrailDrawer } from "../../components/AuditTrailDrawer";
 import {
   addSurveyQuestion,
   clearStoredTokens,
@@ -71,6 +72,7 @@ import {
   TENANT_SIDEBAR_STORAGE_KEY,
   usePersistedSidebarCollapsed,
 } from "../../hooks/usePersistedSidebarCollapsed";
+import { AuditTrailScopeProvider, useOptionalAuditTrailScope } from "../../contexts/AuditTrailScopeContext";
 
 type PageState = "loading" | "ready" | "error";
 type ActiveAdminView =
@@ -92,7 +94,7 @@ const VIEW_CONFIG: Record<ActiveAdminView, { title: string; action: string | nul
   surveys: { title: "Surveys", action: "Create Survey" },
   channels: { title: "Channels", action: "Create Channel" },
   responses: { title: "Responses", action: null },
-  analytics: { title: "Analytics", action: "Export CSV" },
+  analytics: { title: "Analytics", action: null },
   organization: { title: "Organization", action: null },
   templates: { title: "Templates", action: null },
   users: { title: "Users", action: "Add User" },
@@ -375,12 +377,22 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
     (activeView === "locations" && can("location:create")) ||
     (activeView === "surveys" && can("survey:create")) ||
     (activeView === "channels" && can("channel:create")) ||
-    (activeView === "users" && can("user:create")) ||
-    (activeView === "analytics" && can("analytics:read"));
+    (activeView === "users" && can("user:create"));
+
+  const [auditTrailOpen, setAuditTrailOpen] = useState(false);
+  const [auditDetailResourceId, setAuditDetailResourceId] = useState<string | null>(null);
+
+  const canShowAuditTrail =
+    pageState === "ready" &&
+    can("audit:read") &&
+    Boolean(
+      me?.role_codes.includes("tenant_admin") || me?.role_codes.includes("platform_super_admin"),
+    );
 
   return (
     <>
       <div className="app-shell">
+        <AuditTrailScopeProvider activeViewKey={activeView} setDetailResourceId={setAuditDetailResourceId}>
         <aside
           className={`sidebar${sidebarCollapsed ? " sidebar--collapsed" : ""}`}
           aria-label="Tenant administration"
@@ -555,6 +567,17 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
             <button className="btn btn--ghost btn--icon" type="button" aria-label="Help">
               <span className="material-symbols-outlined">help_outline</span>
             </button>
+            {canShowAuditTrail && dashboardData && getStoredAccessToken() ? (
+              <button
+                className="btn btn--ghost btn--icon"
+                type="button"
+                aria-label="Open audit trail for this page"
+                title="Audit trail"
+                onClick={() => setAuditTrailOpen(true)}
+              >
+                <span className="material-symbols-outlined">history</span>
+              </button>
+            ) : null}
             {activeViewConfig.action && canUseActiveAction ? (
               <button
                 className="btn btn--primary"
@@ -570,9 +593,7 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
                   }
                 }}
               >
-                <span className="material-symbols-outlined">
-                  {activeView === "analytics" ? "download" : "add"}
-                </span>
+                <span className="material-symbols-outlined">add</span>
                 {activeViewConfig.action}
               </button>
             ) : null}
@@ -635,6 +656,19 @@ export function TenantDashboardPage({ onSignedOut }: { onSignedOut: () => void }
           tenantId={dashboardData.tenant.id}
         />
       ) : null}
+        </AuditTrailScopeProvider>
+        {canShowAuditTrail && dashboardData && getStoredAccessToken() ? (
+          <AuditTrailDrawer
+            open={auditTrailOpen}
+            onClose={() => setAuditTrailOpen(false)}
+            variant="tenant"
+            token={getStoredAccessToken()!}
+            tenantId={dashboardData.tenant.id}
+            activeView={activeView}
+            surveyBuilderSurveyId={activeSurveyBuilderId}
+            detailResourceId={auditDetailResourceId}
+          />
+        ) : null}
     </div>
     {canSwitchOrgs && dashboardData ? (
       <OrganizationSwitcherModal
@@ -2731,6 +2765,13 @@ function RolesView({
 }) {
   const [isCreatingRole, setIsCreatingRole] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const auditTrail = useOptionalAuditTrailScope();
+  useEffect(() => {
+    if (!auditTrail) {
+      return;
+    }
+    auditTrail.setDetailResourceId(editingRole?.id ?? null);
+  }, [auditTrail, editingRole]);
   const roleCounts = new Map<string, number>();
   for (const user of users) {
     for (const binding of user.role_bindings) {
@@ -3092,6 +3133,13 @@ function LocationTable({
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [archivingLocation, setArchivingLocation] = useState<Location | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const auditTrail = useOptionalAuditTrailScope();
+  useEffect(() => {
+    if (!auditTrail) {
+      return;
+    }
+    auditTrail.setDetailResourceId(editingLocation?.id ?? null);
+  }, [editingLocation, auditTrail]);
   const canArchiveLocation = hasClientPermission(me, "location:archive");
   const rowMenuButtonRefs = useRef(new Map<string, HTMLButtonElement | null>());
 
@@ -3333,6 +3381,14 @@ function ChannelTable({
   const [archivingChannel, setArchivingChannel] = useState<Channel | null>(null);
   const [qrPosterChannel, setQrPosterChannel] = useState<Channel | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const auditTrail = useOptionalAuditTrailScope();
+  useEffect(() => {
+    if (!auditTrail) {
+      return;
+    }
+    const focus = editingChannel ?? copyingChannel ?? archivingChannel ?? qrPosterChannel;
+    auditTrail.setDetailResourceId(focus?.id ?? null);
+  }, [archivingChannel, auditTrail, copyingChannel, editingChannel, qrPosterChannel]);
   const canArchiveChannel = hasClientPermission(me, "channel:archive");
   const rowMenuButtonRefs = useRef(new Map<string, HTMLButtonElement | null>());
 
@@ -4082,6 +4138,13 @@ function UserTable({
   const [openMenuUserId, setOpenMenuUserId] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<TenantUser | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const auditTrail = useOptionalAuditTrailScope();
+  useEffect(() => {
+    if (!auditTrail) {
+      return;
+    }
+    auditTrail.setDetailResourceId(editingUser?.id ?? null);
+  }, [auditTrail, editingUser]);
   const canArchiveUser = hasClientPermission(me, "user:archive");
   const rowMenuButtonRefs = useRef(new Map<string, HTMLButtonElement | null>());
 

@@ -4,6 +4,7 @@ import type { MeResponse, SurveyTemplate } from "../types/admin";
 import type { PublicBranding } from "../types/publicFeedback";
 
 import { TemplateLibrarySection } from "../components/admin/TemplateLibrarySection";
+import { AuditTrailDrawer } from "../components/AuditTrailDrawer";
 import {
   clearPlatformTokens,
   createPlatformSuperAdmin,
@@ -82,6 +83,7 @@ function PlatformShell({ onSignedOut }: { onSignedOut: () => void }) {
   const [section, setSection] = useState<PlatformSection>("tenants");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [auditTrailOpen, setAuditTrailOpen] = useState(false);
   const { collapsed: sidebarCollapsed, toggle: toggleSidebarCollapsed } = usePersistedSidebarCollapsed(
     PLATFORM_SIDEBAR_STORAGE_KEY,
   );
@@ -205,20 +207,37 @@ function PlatformShell({ onSignedOut }: { onSignedOut: () => void }) {
       </aside>
       <main className="main-panel">
         <header className="main-header">
-          <h1 className="main-title">
-            {section === "tenants"
-              ? "Tenants"
-              : section === "users"
-                ? "Users"
-                : "Templates"}
-          </h1>
-          <p className="main-subtitle muted">
-            {section === "tenants"
-              ? "Create organizations and designate a tenant administrator."
-              : section === "users"
-                ? "Super administrators for this platform console. Deactivated users cannot sign in here or to tenant dashboards with this account."
-                : "Browse the global survey template catalog and preview how each layout renders with sample questions."}
-          </p>
+          <div className="main-header__lead">
+            <h1 className="main-title">
+              {section === "tenants"
+                ? "Tenants"
+                : section === "users"
+                  ? "Users"
+                  : "Templates"}
+            </h1>
+            <p className="main-subtitle muted">
+              {section === "tenants"
+                ? "Create organizations and designate a tenant administrator."
+                : section === "users"
+                  ? "Super administrators for this platform console. Deactivated users cannot sign in here or to tenant dashboards with this account."
+                  : "Browse the global survey template catalog and preview how each layout renders with sample questions."}
+            </p>
+          </div>
+          {me?.permission_codes.includes("audit:read") &&
+          me.role_codes.includes("platform_super_admin") &&
+          token ? (
+            <div className="topbar-actions main-header__actions">
+              <button
+                type="button"
+                className="btn btn--ghost btn--icon"
+                aria-label="Open audit trail for this page"
+                title="Audit trail"
+                onClick={() => setAuditTrailOpen(true)}
+              >
+                <span className="material-symbols-outlined">history</span>
+              </button>
+            </div>
+          ) : null}
         </header>
         {loading ? <p className="muted">Loading…</p> : null}
         {!loading && error ? <div className="field-error-msg">{error}</div> : null}
@@ -228,6 +247,17 @@ function PlatformShell({ onSignedOut }: { onSignedOut: () => void }) {
         {!loading && !error && section === "tenants" ? <PlatformTenantsPanel token={token!} /> : null}
         {!loading && !error && section === "templates" ? <PlatformTemplatesPanel token={token!} /> : null}
       </main>
+      {me?.permission_codes.includes("audit:read") &&
+      me.role_codes.includes("platform_super_admin") &&
+      token ? (
+        <AuditTrailDrawer
+          open={auditTrailOpen}
+          onClose={() => setAuditTrailOpen(false)}
+          variant="platform"
+          token={token}
+          platformPage={section === "templates" ? "templates" : section === "users" ? "users" : "tenants"}
+        />
+      ) : null}
     </div>
   );
 }

@@ -6,12 +6,14 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.audit_logs import serialize_audit_log_rows
+from app.api.audit_schemas import AuditLogEntry
 from app.api.platform_schemas import (
     PlatformTenantAddressPatchRequest,
     PlatformTenantCreateRequest,
@@ -28,6 +30,7 @@ from app.api.tenants import (
     get_branding_or_create,
     get_tenant_role_or_404,
 )
+from app.auth.authorization import require_permission
 from app.auth.dependencies import get_current_principal
 from app.auth.passwords import hash_password
 from app.auth.principal import Principal
@@ -48,6 +51,13 @@ from app.models.survey_template import SurveyTemplate
 from app.models.tenant import Tenant
 from app.schemas.survey_presentation import parse_presentation
 from app.services.audit import write_audit_log
+from app.services.audit_list import list_platform_audit_logs
+from app.services.audit_context import (
+    audit_actor_from_principal,
+    audit_metadata,
+    tenant_audit_snapshot,
+    user_profile_audit_snapshot,
+)
 from app.services.template_pack import build_export_zip, import_template_pack, remove_template_pack_dir
 
 router = APIRouter(prefix="/platform", tags=["platform"])
@@ -290,6 +300,7 @@ async def export_platform_survey_template_pack(
 async def import_platform_survey_template_pack(
     session: Annotated[AsyncSession, Depends(get_session)],
     principal: Annotated[Principal, Depends(get_current_principal)],
+    request: Request,
     file: Annotated[UploadFile, File(description="ZIP with template.json and optional assets/")],
 ) -> SurveyTemplateResponse:
     await ensure_permissions_and_default_roles(session)
@@ -298,6 +309,24 @@ async def import_platform_survey_template_pack(
     settings = get_settings()
     try:
         tpl = await import_template_pack(settings, session, file)
+        actor = await audit_actor_from_principal(session, principal)
+        await write_audit_log(
+            session,
+            actor_type=AuditActorType.USER,
+            actor_id=str(principal.user_id),
+            tenant_id=None,
+            action=AuditAction.PLATFORM_TEMPLATE_IMPORTED,
+            outcome=AuditOutcome.SUCCESS,
+            resource_type="survey_template",
+            resource_id=str(tpl.id),
+            request_id=getattr(request.state, "request_id", None),
+            metadata=audit_metadata(
+                actor=actor,
+                payload_level="action_only",
+                slug=tpl.slug,
+                name=tpl.name,
+            ),
+        )
         await session.commit()
     except Exception:
         await session.rollback()
@@ -311,6 +340,7 @@ async def delete_platform_survey_template(
     template_id: UUID,
     session: Annotated[AsyncSession, Depends(get_session)],
     principal: Annotated[Principal, Depends(get_current_principal)],
+    request: Request,
 ) -> None:
     await ensure_permissions_and_default_roles(session)
     _require_platform_operator(principal)
@@ -343,6 +373,24 @@ async def delete_platform_survey_template(
 
     settings = get_settings()
     try:
+        actor = await audit_actor_from_principal(session, principal)
+        await write_audit_log(
+            session,
+            actor_type=AuditActorType.USER,
+            actor_id=str(principal.user_id),
+            tenant_id=None,
+            action=AuditAction.PLATFORM_TEMPLATE_DELETED,
+            outcome=AuditOutcome.SUCCESS,
+            resource_type="survey_template",
+            resource_id=str(row.id),
+            request_id=getattr(request.state, "request_id", None),
+            metadata=audit_metadata(
+                actor=actor,
+                payload_level="action_only",
+                slug=row.slug,
+                name=row.name,
+            ),
+        )
         await session.delete(row)
         await session.commit()
     except Exception:
@@ -360,6 +408,7 @@ async def create_super_admin_user(
     payload: SuperAdminUserCreateRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
     principal: Annotated[Principal, Depends(get_current_principal)],
+    request: Request,
 ) -> SuperAdminUserResponse:
     await ensure_permissions_and_default_roles(session)
     _require_platform_operator(principal)
@@ -412,7 +461,11 @@ async def create_super_admin_user(
         outcome=AuditOutcome.SUCCESS,
         resource_type="platform_user",
         resource_id=str(user.id),
-        metadata={"email": user.email},
+        request_id=getattr(request.state, "request_id", None),
+        metadata=audit_metadata(
+            actor=await audit_actor_from_principal(session, principal),
+            after=user_profile_audit_snapshot(user),
+        ),
     )
     try:
         await session.commit()
@@ -443,6 +496,7 @@ async def patch_super_admin_user(
     payload: SuperAdminUserPatchRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
     principal: Annotated[Principal, Depends(get_current_principal)],
+    request: Request,
 ) -> SuperAdminUserResponse:
     await ensure_permissions_and_default_roles(session)
     _require_platform_operator(principal)
@@ -463,6 +517,7 @@ async def patch_super_admin_user(
         )
 
     if user.status != payload.status:
+        before = user_profile_audit_snapshot(user)
         user.status = payload.status
         user.token_version += 1
         await write_audit_log(
@@ -470,11 +525,16 @@ async def patch_super_admin_user(
             actor_type=AuditActorType.USER,
             actor_id=str(principal.user_id),
             tenant_id=None,
-            action=AuditAction.ROLE_CHANGED,
+            action=AuditAction.PLATFORM_USER_UPDATED,
             outcome=AuditOutcome.SUCCESS,
             resource_type="platform_user",
             resource_id=str(user.id),
-            metadata={"status": payload.status.value},
+            request_id=getattr(request.state, "request_id", None),
+            metadata=audit_metadata(
+                actor=await audit_actor_from_principal(session, principal),
+                before=before,
+                after=user_profile_audit_snapshot(user),
+            ),
         )
         try:
             await session.commit()
@@ -519,6 +579,7 @@ async def create_tenant_with_admin(
     payload: PlatformTenantCreateRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
     principal: Annotated[Principal, Depends(get_current_principal)],
+    request: Request,
 ) -> TenantResponse:
     await ensure_permissions_and_default_roles(session)
     _require_platform_operator(principal)
@@ -587,11 +648,16 @@ async def create_tenant_with_admin(
         actor_type=AuditActorType.USER,
         actor_id=str(principal.user_id),
         tenant_id=tenant.id,
-        action=AuditAction.USER_CREATED,
+        action=AuditAction.TENANT_PROVISIONED,
         outcome=AuditOutcome.SUCCESS,
         resource_type="tenant",
         resource_id=str(tenant.id),
-        metadata={"operation": "platform_create_tenant", "admin_email": admin_email},
+        request_id=getattr(request.state, "request_id", None),
+        metadata=audit_metadata(
+            actor=await audit_actor_from_principal(session, principal),
+            after=tenant_audit_snapshot(tenant),
+            admin_email=admin_email,
+        ),
     )
 
     try:
@@ -613,6 +679,7 @@ async def patch_platform_tenant_address(
     payload: PlatformTenantAddressPatchRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
     principal: Annotated[Principal, Depends(get_current_principal)],
+    request: Request,
 ) -> PlatformTenantListEntry:
     await ensure_permissions_and_default_roles(session)
     _require_platform_operator(principal)
@@ -634,6 +701,7 @@ async def patch_platform_tenant_address(
             detail="Provide at least one address field to update.",
         )
 
+    before = tenant_audit_snapshot(tenant)
     for field_name, raw in updates.items():
         if isinstance(raw, str):
             setattr(tenant, field_name, _optional_address_line(raw))
@@ -645,11 +713,18 @@ async def patch_platform_tenant_address(
         actor_type=AuditActorType.USER,
         actor_id=str(principal.user_id),
         tenant_id=tenant.id,
-        action=AuditAction.TENANT_ACCESS,
+        action=AuditAction.TENANT_PLATFORM_UPDATED,
         outcome=AuditOutcome.SUCCESS,
         resource_type="tenant",
         resource_id=str(tenant.id),
-        metadata={"operation": "platform_patch_tenant_address", "fields": sorted(updates.keys())},
+        request_id=getattr(request.state, "request_id", None),
+        metadata=audit_metadata(
+            actor=await audit_actor_from_principal(session, principal),
+            before=before,
+            after=tenant_audit_snapshot(tenant),
+            change="address",
+            fields=sorted(updates.keys()),
+        ),
     )
     try:
         await session.commit()
@@ -671,6 +746,7 @@ async def patch_platform_tenant(
     payload: PlatformTenantPatchRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
     principal: Annotated[Principal, Depends(get_current_principal)],
+    request: Request,
 ) -> TenantResponse:
     await ensure_permissions_and_default_roles(session)
     _require_platform_operator(principal)
@@ -686,6 +762,7 @@ async def patch_platform_tenant(
             detail="Provide at least one field to update.",
         )
 
+    before = tenant_audit_snapshot(tenant)
     touched_profile = _PLATFORM_TENANT_PROFILE_FIELDS.intersection(updates.keys())
     if touched_profile and PermissionCode.TENANT_UPDATE.value not in principal.permission_codes:
         raise HTTPException(
@@ -743,11 +820,17 @@ async def patch_platform_tenant(
         actor_type=AuditActorType.USER,
         actor_id=str(principal.user_id),
         tenant_id=tenant.id,
-        action=AuditAction.TENANT_ACCESS,
+        action=AuditAction.TENANT_PLATFORM_UPDATED,
         outcome=AuditOutcome.SUCCESS,
         resource_type="tenant",
         resource_id=str(tenant.id),
-        metadata={"operation": "platform_patch_tenant", "fields": sorted(updates.keys())},
+        request_id=getattr(request.state, "request_id", None),
+        metadata=audit_metadata(
+            actor=await audit_actor_from_principal(session, principal),
+            before=before,
+            after=tenant_audit_snapshot(tenant),
+            fields=sorted(updates.keys()),
+        ),
     )
     try:
         await session.commit()
@@ -760,3 +843,32 @@ async def patch_platform_tenant(
 
     await session.refresh(tenant)
     return TenantResponse.model_validate(tenant, from_attributes=True)
+
+
+@router.get("/audit-logs", response_model=list[AuditLogEntry])
+async def get_platform_audit_logs(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    principal: Annotated[Principal, Depends(get_current_principal)],
+    page: str,
+    action: str | None = None,
+    q: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[AuditLogEntry]:
+    await ensure_permissions_and_default_roles(session)
+    _require_platform_operator(principal)
+    require_permission(principal, PermissionCode.AUDIT_READ)
+    if page not in ("templates", "tenants", "users"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid page. Use templates, tenants, or users.",
+        )
+    rows = await list_platform_audit_logs(
+        session,
+        page=page,
+        action_filter=action,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )
+    return serialize_audit_log_rows(rows)

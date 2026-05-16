@@ -35,6 +35,12 @@ from app.models.enums import (
 from app.models.survey import Question, QuestionOption, Survey, SurveyVersion
 from app.models.tenant import Tenant
 from app.services.audit import write_audit_log
+from app.services.audit_context import (
+    audit_actor_from_principal,
+    audit_metadata,
+    question_audit_snapshot,
+    survey_audit_snapshot,
+)
 from app.services.surveys import publish_survey_version
 
 router = APIRouter(prefix="/tenants/{tenant_id}/surveys", tags=["surveys"])
@@ -165,17 +171,18 @@ async def create_survey(
     session.add(survey)
     try:
         await session.flush()
+        actor = await audit_actor_from_principal(session, principal)
         await write_audit_log(
             session,
             actor_type=AuditActorType.USER,
             actor_id=str(principal.user_id),
             tenant_id=tenant_id,
-            action=AuditAction.TENANT_ACCESS,
+            action=AuditAction.SURVEY_CREATED,
             outcome=AuditOutcome.SUCCESS,
             resource_type="survey",
             resource_id=str(survey.id),
             request_id=getattr(request.state, "request_id", None),
-            metadata={"operation": "create_survey", "slug": survey.slug},
+            metadata=audit_metadata(actor=actor, after=survey_audit_snapshot(survey)),
         )
         await session.commit()
     except IntegrityError as exc:
@@ -280,24 +287,27 @@ async def update_survey(
         require_survey_owner_or_admin(principal, survey)
 
     update_data = payload.model_dump(exclude_unset=True)
+    before = survey_audit_snapshot(survey)
     if "status" in update_data:
         survey.status = update_data["status"]
-
+    after = survey_audit_snapshot(survey)
+    actor = await audit_actor_from_principal(session, principal)
     await write_audit_log(
         session,
         actor_type=AuditActorType.USER,
         actor_id=str(principal.user_id),
         tenant_id=tenant_id,
-        action=AuditAction.TENANT_ACCESS,
+        action=AuditAction.SURVEY_UPDATED,
         outcome=AuditOutcome.SUCCESS,
         resource_type="survey",
         resource_id=str(survey.id),
         request_id=getattr(request.state, "request_id", None),
-        metadata={
-            "operation": "update_survey",
-            "fields": sorted(update_data.keys()),
-            "status": survey.status.value,
-        },
+        metadata=audit_metadata(
+            actor=actor,
+            before=before,
+            after=after,
+            fields=sorted(update_data.keys()),
+        ),
     )
     await session.commit()
     await session.refresh(survey)
@@ -371,21 +381,22 @@ async def copy_survey(
                     )
                 )
 
+        actor = await audit_actor_from_principal(session, principal)
         await write_audit_log(
             session,
             actor_type=AuditActorType.USER,
             actor_id=str(principal.user_id),
             tenant_id=tenant_id,
-            action=AuditAction.TENANT_ACCESS,
+            action=AuditAction.SURVEY_COPIED,
             outcome=AuditOutcome.SUCCESS,
             resource_type="survey",
             resource_id=str(copied_survey.id),
             request_id=getattr(request.state, "request_id", None),
-            metadata={
-                "operation": "copy_survey",
-                "source_survey_id": str(source_survey.id),
-                "slug": copied_survey.slug,
-            },
+            metadata=audit_metadata(
+                actor=actor,
+                after=survey_audit_snapshot(copied_survey),
+                source_survey_id=str(source_survey.id),
+            ),
         )
         await session.commit()
     except IntegrityError as exc:
@@ -408,6 +419,7 @@ async def add_question(
     tenant_id: UUID,
     survey_id: UUID,
     payload: QuestionCreateRequest,
+    request: Request,
     principal: Annotated[Principal, Depends(get_current_principal)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> QuestionResponse:
@@ -446,6 +458,25 @@ async def add_question(
                     sort_order=option_payload.sort_order,
                 )
             )
+        await session.flush()
+        actor = await audit_actor_from_principal(session, principal)
+        after_question = await question_audit_snapshot(session, question)
+        await write_audit_log(
+            session,
+            actor_type=AuditActorType.USER,
+            actor_id=str(principal.user_id),
+            tenant_id=tenant_id,
+            action=AuditAction.SURVEY_QUESTION_CREATED,
+            outcome=AuditOutcome.SUCCESS,
+            resource_type="question",
+            resource_id=str(question.id),
+            request_id=getattr(request.state, "request_id", None),
+            metadata=audit_metadata(
+                actor=actor,
+                after=after_question,
+                survey_id=str(survey_id),
+            ),
+        )
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -467,6 +498,7 @@ async def update_question(
     survey_id: UUID,
     question_id: UUID,
     payload: QuestionUpdateRequest,
+    request: Request,
     principal: Annotated[Principal, Depends(get_current_principal)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> QuestionResponse:
@@ -483,6 +515,7 @@ async def update_question(
         survey_id=survey_id,
         question_id=question_id,
     )
+    before = await question_audit_snapshot(session, question)
     update_data = payload.model_dump(exclude_unset=True)
     options_payload = update_data.pop("options", None)
     next_question_type = update_data.get("question_type", question.question_type)
@@ -516,6 +549,26 @@ async def update_question(
                         sort_order=option_payload["sort_order"],
                     )
                 )
+        await session.flush()
+        after = await question_audit_snapshot(session, question)
+        actor = await audit_actor_from_principal(session, principal)
+        await write_audit_log(
+            session,
+            actor_type=AuditActorType.USER,
+            actor_id=str(principal.user_id),
+            tenant_id=tenant_id,
+            action=AuditAction.SURVEY_QUESTION_UPDATED,
+            outcome=AuditOutcome.SUCCESS,
+            resource_type="question",
+            resource_id=str(question.id),
+            request_id=getattr(request.state, "request_id", None),
+            metadata=audit_metadata(
+                actor=actor,
+                before=before,
+                after=after,
+                survey_id=str(survey_id),
+            ),
+        )
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -547,6 +600,7 @@ async def publish_survey(
             survey=survey,
             published_by_user_id=principal.user_id,
         )
+        actor = await audit_actor_from_principal(session, principal)
         await write_audit_log(
             session,
             actor_type=AuditActorType.USER,
@@ -557,7 +611,14 @@ async def publish_survey(
             resource_type="survey_version",
             resource_id=str(version.id),
             request_id=getattr(request.state, "request_id", None),
-            metadata={"survey_id": str(survey_id), "version_number": version.version_number},
+            metadata=audit_metadata(
+                actor=actor,
+                payload_level="action_only",
+                survey_id=str(survey_id),
+                version_number=version.version_number,
+                survey_slug=survey.slug,
+                survey_title=survey.title,
+            ),
         )
         await session.commit()
     except ValueError as exc:

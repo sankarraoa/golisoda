@@ -33,6 +33,11 @@ from app.models.survey import SurveyVersion
 from app.models.survey_template import SurveyTemplate
 from app.models.tenant import Location, Tenant
 from app.services.audit import write_audit_log
+from app.services.audit_context import (
+    audit_actor_from_principal,
+    audit_metadata,
+    channel_audit_snapshot,
+)
 from app.services.channels import generate_unique_channel_code
 
 router = APIRouter(prefix="/tenants/{tenant_id}/channels", tags=["channels"])
@@ -180,11 +185,10 @@ async def create_channel(
             resource_type="feedback_channel",
             resource_id=str(channel.id),
             request_id=getattr(request.state, "request_id", None),
-            metadata={
-                "location_id": str(channel.location_id),
-                "survey_version_id": str(channel.survey_version_id),
-                "survey_template_id": str(channel.survey_template_id),
-            },
+            metadata=audit_metadata(
+                actor=await audit_actor_from_principal(session, principal),
+                after=channel_audit_snapshot(channel),
+            ),
         )
         await session.commit()
     except IntegrityError as exc:
@@ -230,6 +234,7 @@ async def update_channel(
     channel = await get_channel_or_404(session, tenant_id=tenant_id, channel_id=channel_id)
     require_channel_location_scope(principal, channel)
 
+    before = channel_audit_snapshot(channel)
     if payload.location_id is not None:
         await get_location_or_404(session, tenant_id=tenant_id, location_id=payload.location_id)
         if is_location_scoped(principal) and payload.location_id not in principal.location_ids:
@@ -256,17 +261,22 @@ async def update_channel(
     if payload.metadata is not None:
         channel.metadata_json = payload.metadata
 
+    actor = await audit_actor_from_principal(session, principal)
     await write_audit_log(
         session,
         actor_type=AuditActorType.USER,
         actor_id=str(principal.user_id),
         tenant_id=tenant_id,
-        action=AuditAction.TENANT_ACCESS,
+        action=AuditAction.CHANNEL_UPDATED,
         outcome=AuditOutcome.SUCCESS,
         resource_type="feedback_channel",
         resource_id=str(channel.id),
         request_id=getattr(request.state, "request_id", None),
-        metadata={"operation": "update_channel"},
+        metadata=audit_metadata(
+            actor=actor,
+            before=before,
+            after=channel_audit_snapshot(channel),
+        ),
     )
     await session.commit()
     await session.refresh(channel)
@@ -308,17 +318,22 @@ async def copy_channel(
     )
     session.add(copied_channel)
     await session.flush()
+    actor = await audit_actor_from_principal(session, principal)
     await write_audit_log(
         session,
         actor_type=AuditActorType.USER,
         actor_id=str(principal.user_id),
         tenant_id=tenant_id,
-        action=AuditAction.CHANNEL_CREATED,
+        action=AuditAction.CHANNEL_COPIED,
         outcome=AuditOutcome.SUCCESS,
         resource_type="feedback_channel",
         resource_id=str(copied_channel.id),
         request_id=getattr(request.state, "request_id", None),
-        metadata={"operation": "copy_channel", "source_channel_id": str(source_channel.id)},
+        metadata=audit_metadata(
+            actor=actor,
+            after=channel_audit_snapshot(copied_channel),
+            source_channel_id=str(source_channel.id),
+        ),
     )
     await session.commit()
     await session.refresh(copied_channel)

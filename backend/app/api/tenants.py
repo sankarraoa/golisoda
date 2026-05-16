@@ -46,6 +46,16 @@ from app.models.enums import (
 from app.models.tenant import Location, Tenant, TenantBranding
 from app.schemas.survey_theme import SurveyThemeConfig
 from app.services.audit import write_audit_log
+from app.services.audit_context import (
+    audit_actor_from_principal,
+    audit_metadata,
+    branding_audit_snapshot,
+    location_audit_snapshot,
+    role_definition_snapshot,
+    tenant_audit_snapshot,
+    user_bindings_snapshot,
+    user_profile_audit_snapshot,
+)
 from app.services.branding_assets import (
     BrandingAssetError,
     download_logo_bytes,
@@ -314,19 +324,26 @@ async def update_tenant_profile(
     update_data = payload.model_dump(exclude_unset=True)
     if not update_data:
         return TenantResponse.model_validate(tenant, from_attributes=True)
+    before = tenant_audit_snapshot(tenant)
     for field_name, value in update_data.items():
         setattr(tenant, field_name, value)
+    actor = await audit_actor_from_principal(session, principal)
     await write_audit_log(
         session,
         actor_type=AuditActorType.USER,
         actor_id=str(principal.user_id),
         tenant_id=tenant_id,
-        action=AuditAction.TENANT_ACCESS,
+        action=AuditAction.TENANT_PROFILE_UPDATED,
         outcome=AuditOutcome.SUCCESS,
         resource_type="tenant",
         resource_id=str(tenant.id),
         request_id=getattr(request.state, "request_id", None),
-        metadata={"operation": "update_tenant_profile", "fields": sorted(update_data.keys())},
+        metadata=audit_metadata(
+            actor=actor,
+            before=before,
+            after=tenant_audit_snapshot(tenant),
+            fields=sorted(update_data.keys()),
+        ),
     )
     await session.commit()
     await session.refresh(tenant)
@@ -386,20 +403,30 @@ async def update_branding(
         # Raises ValueError → FastAPI returns 422 with field-level details.
         SurveyThemeConfig(tokens=update_data["theme_overrides"])
 
+    theme_touch = "theme_overrides" in update_data
+    before_branding = branding_audit_snapshot(branding, redact_theme=theme_touch)
+
     for field_name, value in update_data.items():
         setattr(branding, field_name, value)
 
+    actor = await audit_actor_from_principal(session, principal)
     await write_audit_log(
         session,
         actor_type=AuditActorType.USER,
         actor_id=str(principal.user_id),
         tenant_id=tenant_id,
-        action=AuditAction.TENANT_ACCESS,
+        action=AuditAction.BRANDING_UPDATED,
         outcome=AuditOutcome.SUCCESS,
         resource_type="tenant_branding",
         resource_id=str(branding.id),
         request_id=getattr(request.state, "request_id", None),
-        metadata={"operation": "update_branding", "fields": sorted(update_data.keys())},
+        metadata=audit_metadata(
+            actor=actor,
+            before=before_branding,
+            after=branding_audit_snapshot(branding, redact_theme=theme_touch),
+            fields=sorted(update_data.keys()),
+            change="branding_patch",
+        ),
     )
     await session.commit()
     await session.refresh(branding)
@@ -424,22 +451,29 @@ async def _persist_logo_bytes_and_response(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     remove_local_logo_file(branding.logo_url, tenant_id=tenant_id, upload_root=upload_root)
+    before = branding_audit_snapshot(branding, redact_theme=False)
     branding.logo_url = public_logo_url(
         api_public_origin=settings.api_public_origin,
         tenant_id=tenant_id,
         filename=filename,
     )
+    actor = await audit_actor_from_principal(session, principal)
     await write_audit_log(
         session,
         actor_type=AuditActorType.USER,
         actor_id=str(principal.user_id),
         tenant_id=tenant_id,
-        action=AuditAction.TENANT_ACCESS,
+        action=AuditAction.BRANDING_UPDATED,
         outcome=AuditOutcome.SUCCESS,
         resource_type="tenant_branding",
         resource_id=str(branding.id),
         request_id=getattr(request.state, "request_id", None),
-        metadata={"operation": "branding_logo_local_store"},
+        metadata=audit_metadata(
+            actor=actor,
+            change="branding_logo",
+            before=before,
+            after=branding_audit_snapshot(branding, redact_theme=False),
+        ),
     )
     await session.commit()
     await session.refresh(branding)
@@ -548,6 +582,7 @@ async def list_roles(
 async def create_role(
     tenant_id: UUID,
     payload: RoleCreateRequest,
+    request: Request,
     principal: Annotated[Principal, Depends(get_current_principal)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> RoleResponse:
@@ -570,6 +605,22 @@ async def create_role(
     )
     for permission in permissions:
         session.add(RolePermission(role_id=role.id, permission_id=permission.id))
+    actor = await audit_actor_from_principal(session, principal)
+    await write_audit_log(
+        session,
+        actor_type=AuditActorType.USER,
+        actor_id=str(principal.user_id),
+        tenant_id=tenant_id,
+        action=AuditAction.ROLE_CREATED,
+        outcome=AuditOutcome.SUCCESS,
+        resource_type="role",
+        resource_id=str(role.id),
+        request_id=getattr(request.state, "request_id", None),
+        metadata=audit_metadata(
+            actor=actor,
+            after=await role_definition_snapshot(session, role),
+        ),
+    )
     await session.commit()
     await session.refresh(role)
     return await serialize_role(session, role)
@@ -580,6 +631,7 @@ async def update_role(
     tenant_id: UUID,
     role_id: UUID,
     payload: RoleUpdateRequest,
+    request: Request,
     principal: Annotated[Principal, Depends(get_current_principal)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> RoleResponse:
@@ -591,6 +643,7 @@ async def update_role(
     role = await session.get(Role, role_id)
     if role is None or (role.tenant_id is not None and role.tenant_id != tenant_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found.")
+    before = await role_definition_snapshot(session, role)
     if payload.name is not None:
         role.name = payload.name
     if payload.description is not None:
@@ -603,6 +656,24 @@ async def update_role(
         for permission in permissions:
             session.add(RolePermission(role_id=role.id, permission_id=permission.id))
 
+    await session.flush()
+    actor = await audit_actor_from_principal(session, principal)
+    await write_audit_log(
+        session,
+        actor_type=AuditActorType.USER,
+        actor_id=str(principal.user_id),
+        tenant_id=tenant_id,
+        action=AuditAction.ROLE_UPDATED,
+        outcome=AuditOutcome.SUCCESS,
+        resource_type="role",
+        resource_id=str(role.id),
+        request_id=getattr(request.state, "request_id", None),
+        metadata=audit_metadata(
+            actor=actor,
+            before=before,
+            after=await role_definition_snapshot(session, role),
+        ),
+    )
     await session.commit()
     await session.refresh(role)
     return await serialize_role(session, role)
@@ -661,12 +732,15 @@ async def create_location(
             actor_type=AuditActorType.USER,
             actor_id=str(principal.user_id),
             tenant_id=tenant_id,
-            action=AuditAction.TENANT_ACCESS,
+            action=AuditAction.LOCATION_CREATED,
             outcome=AuditOutcome.SUCCESS,
             resource_type="location",
             resource_id=str(location.id),
             request_id=getattr(request.state, "request_id", None),
-            metadata={"operation": "create_location", "code": location.code},
+            metadata=audit_metadata(
+                actor=await audit_actor_from_principal(session, principal),
+                after=location_audit_snapshot(location),
+            ),
         )
         await session.commit()
     except IntegrityError as exc:
@@ -703,6 +777,7 @@ async def update_location(
         require_permission(principal, PermissionCode.LOCATION_ARCHIVE)
 
     update_data = payload.model_dump(exclude_unset=True)
+    before = location_audit_snapshot(location)
     for field_name, value in update_data.items():
         setattr(location, field_name, value)
 
@@ -712,12 +787,17 @@ async def update_location(
             actor_type=AuditActorType.USER,
             actor_id=str(principal.user_id),
             tenant_id=tenant_id,
-            action=AuditAction.TENANT_ACCESS,
+            action=AuditAction.LOCATION_UPDATED,
             outcome=AuditOutcome.SUCCESS,
             resource_type="location",
             resource_id=str(location.id),
             request_id=getattr(request.state, "request_id", None),
-            metadata={"operation": "update_location", "fields": sorted(update_data.keys())},
+            metadata=audit_metadata(
+                actor=await audit_actor_from_principal(session, principal),
+                before=before,
+                after=location_audit_snapshot(location),
+                fields=sorted(update_data.keys()),
+            ),
         )
         await session.commit()
     except IntegrityError as exc:
@@ -775,6 +855,7 @@ async def create_tenant_user(
 
     try:
         await session.flush()
+        actor = await audit_actor_from_principal(session, principal)
         await write_audit_log(
             session,
             actor_type=AuditActorType.USER,
@@ -785,7 +866,10 @@ async def create_tenant_user(
             resource_type="user",
             resource_id=str(user.id),
             request_id=getattr(request.state, "request_id", None),
-            metadata={"email": user.email},
+            metadata=audit_metadata(
+                actor=actor,
+                after=user_profile_audit_snapshot(user),
+            ),
         )
         await session.commit()
     except IntegrityError as exc:
@@ -812,6 +896,9 @@ async def update_tenant_user(
     require_tenant_scope(principal, tenant_id)
     await get_tenant_or_404(session, tenant_id)
     user = await get_tenant_user_or_404(session, tenant_id=tenant_id, user_id=user_id)
+
+    before_profile = user_profile_audit_snapshot(user)
+    bindings_before = await user_bindings_snapshot(session, user.id)
 
     if payload.email is not None:
         user.email = str(payload.email).lower()
@@ -857,17 +944,24 @@ async def update_tenant_user(
             )
         user.token_version += 1
 
+    actor = await audit_actor_from_principal(session, principal)
+    after_profile = user_profile_audit_snapshot(user)
+    bindings_after = await user_bindings_snapshot(session, user.id)
     await write_audit_log(
         session,
         actor_type=AuditActorType.USER,
         actor_id=str(principal.user_id),
         tenant_id=tenant_id,
-        action=AuditAction.USER_CREATED,
+        action=AuditAction.USER_UPDATED,
         outcome=AuditOutcome.SUCCESS,
         resource_type="user",
         resource_id=str(user.id),
         request_id=getattr(request.state, "request_id", None),
-        metadata={"operation": "update_user", "status": user.status.value},
+        metadata=audit_metadata(
+            actor=actor,
+            before={"profile": before_profile, "bindings": bindings_before},
+            after={"profile": after_profile, "bindings": bindings_after},
+        ),
     )
     try:
         await session.commit()
@@ -928,22 +1022,23 @@ async def assign_user_role(
             )
         )
         user.token_version += 1
+        actor = await audit_actor_from_principal(session, principal)
         await write_audit_log(
             session,
             actor_type=AuditActorType.USER,
             actor_id=str(principal.user_id),
             tenant_id=tenant_id,
-            action=AuditAction.ROLE_CHANGED,
+            action=AuditAction.ROLE_ASSIGNED,
             outcome=AuditOutcome.SUCCESS,
             resource_type="user",
             resource_id=str(user.id),
             request_id=getattr(request.state, "request_id", None),
-            metadata={
-                "operation": "assign_role",
-                "role_code": role.code,
-                "scope": payload.scope.value,
-                "location_id": str(payload.location_id) if payload.location_id else None,
-            },
+            metadata=audit_metadata(
+                actor=actor,
+                role_code=role.code,
+                scope=payload.scope.value,
+                location_id=str(payload.location_id) if payload.location_id else None,
+            ),
         )
 
     await session.commit()

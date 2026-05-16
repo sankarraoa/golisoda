@@ -1,4 +1,4 @@
-import type { MeResponse, SurveyTemplate, TokenResponse } from "../types/admin";
+import type { AuditLogEntry, MeResponse, SurveyTemplate, TokenResponse } from "../types/admin";
 
 import { resolvePublicEnvUrl } from "./runtimePublicEnv";
 
@@ -254,6 +254,34 @@ export async function patchPlatformTenantAddress(
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+export type PlatformAuditPage = "templates" | "tenants" | "users";
+
+export async function fetchPlatformAuditLogs(
+  token: string,
+  params: {
+    page: PlatformAuditPage;
+    action?: string;
+    q?: string;
+    limit?: number;
+    offset?: number;
+  },
+): Promise<AuditLogEntry[]> {
+  const sp = new URLSearchParams({ page: params.page });
+  if (params.action?.trim()) {
+    sp.set("action", params.action.trim());
+  }
+  if (params.q?.trim()) {
+    sp.set("q", params.q.trim());
+  }
+  if (params.limit != null) {
+    sp.set("limit", String(params.limit));
+  }
+  if (params.offset != null) {
+    sp.set("offset", String(params.offset));
+  }
+  return platformAuthFetch<AuditLogEntry[]>(`/platform/audit-logs?${sp.toString()}`, token);
 }
 
 /** Initial password set for new platform super admins (server-side). */

@@ -11,6 +11,7 @@ from app.api.auth import (
 from app.api.auth import (
     router as monolith_auth_router,
 )
+from app.api.audit_logs import router as audit_logs_router
 from app.api.channels import router as channels_router
 from app.api.health import router as health_router
 from app.api.platform_admin import router as platform_admin_router
@@ -86,6 +87,7 @@ def create_tenant_admin_app() -> FastAPI:
     app.include_router(tenant_admin_auth_router)
     app.include_router(uploads_router)
     app.include_router(tenants_router)
+    app.include_router(audit_logs_router)
     app.include_router(surveys_router)
     app.include_router(channels_router)
     app.include_router(responses_router)
@@ -126,6 +128,7 @@ def create_monolith_app() -> FastAPI:
     app.include_router(monolith_auth_router)
     app.include_router(uploads_router)
     app.include_router(tenants_router)
+    app.include_router(audit_logs_router)
     app.include_router(surveys_router)
     app.include_router(channels_router)
     app.include_router(survey_templates_router)

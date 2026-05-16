@@ -17,6 +17,20 @@ export type MeResponse = {
   token_version: number;
 };
 
+export type AuditLogEntry = {
+  id: string;
+  occurred_at: string;
+  actor_type: string;
+  actor_id: string;
+  tenant_id: string | null;
+  action: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  outcome: string;
+  request_id: string | null;
+  metadata: Record<string, unknown>;
+};
+
 
 export type Tenant = {
   id: string;
